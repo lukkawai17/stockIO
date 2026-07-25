@@ -18,8 +18,14 @@ function pillarName(key: string) {
     risk: "風險",
     relative: "相對",
     quality: "質素",
+    institutional: "機構",
   };
   return map[key] || key;
+}
+
+function fmtPct(n: number, digits = 1) {
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${(n * 100).toFixed(digits)}%`;
 }
 
 export default function StockDetailPage() {
@@ -204,6 +210,94 @@ export default function StockDetailPage() {
           ))}
         </div>
       </div>
+
+      {data.institutional && (
+        <>
+          <p className="group-header">機構動向（13F）</p>
+          <div className="inset-list">
+            <div className="inset-row">
+              <dt>機構持股</dt>
+              <dd>
+                {data.institutional.institutions_percent != null
+                  ? `${(data.institutional.institutions_percent * 100).toFixed(1)}%`
+                  : "—"}
+              </dd>
+            </div>
+            <div className="inset-row">
+              <dt>機構數量</dt>
+              <dd>{data.institutional.institutions_count?.toLocaleString() ?? "—"}</dd>
+            </div>
+            <div className="inset-row">
+              <dt>加權增減</dt>
+              <dd
+                className={
+                  (data.institutional.net_pct_change ?? 0) > 0.5
+                    ? "up"
+                    : (data.institutional.net_pct_change ?? 0) < -0.5
+                      ? "down"
+                      : ""
+                }
+              >
+                {data.institutional.net_pct_change != null
+                  ? `${data.institutional.net_pct_change > 0 ? "+" : ""}${data.institutional.net_pct_change.toFixed(2)}%`
+                  : "—"}
+              </dd>
+            </div>
+            <div className="inset-row">
+              <dt>增持 / 減持</dt>
+              <dd>
+                <span className="up">{data.institutional.increasers}</span>
+                {" / "}
+                <span className="down">{data.institutional.decreasers}</span>
+              </dd>
+            </div>
+            {data.institutional.flow_score != null && (
+              <div className="inset-row">
+                <dt>資金流分數</dt>
+                <dd
+                  className={
+                    data.institutional.flow_score >= 60
+                      ? "up"
+                      : data.institutional.flow_score <= 40
+                        ? "down"
+                        : ""
+                  }
+                >
+                  {data.institutional.flow_score.toFixed(0)}
+                </dd>
+              </div>
+            )}
+            {data.institutional.report_date && (
+              <div className="inset-row">
+                <dt>報告期</dt>
+                <dd>{new Date(data.institutional.report_date).toLocaleDateString()}</dd>
+              </div>
+            )}
+            <p className="group-footer" style={{ margin: "8px 16px 12px" }}>
+              {data.institutional.summary}{" "}
+              <Link href="/learn#institutional">了解機構數據</Link>
+            </p>
+            {data.institutional.holders.length > 0 && (
+              <div className="inst-table">
+                <div className="inst-head">
+                  <span>機構</span>
+                  <span>持股%</span>
+                  <span>變化</span>
+                </div>
+                {data.institutional.holders.map((h) => (
+                  <div key={h.organization} className="inst-row">
+                    <span className="inst-name">{h.organization}</span>
+                    <span>{(h.pct_held * 100).toFixed(2)}%</span>
+                    <span className={h.pct_change > 0 ? "up" : h.pct_change < 0 ? "down" : ""}>
+                      {fmtPct(h.pct_change)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <p className="group-header">支撐 / 阻力</p>
       <div className="inset-list">

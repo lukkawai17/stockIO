@@ -21,6 +21,24 @@ def label_from_score(score: float, buy_at: float = 70, avoid_below: float = 40) 
     return "持有"
 
 
+def _apply_buy_gate(
+    score: float,
+    label: str,
+    pillars: dict,
+    min_strong: int,
+    core_keys: list[str],
+) -> tuple[float, str, bool]:
+    """Downgrade 「買」 when cross-pillar confirmation is missing."""
+    if label != "買":
+        return score, label, False
+    vals = [v for v in pillars.values() if v is not None]
+    strong = sum(1 for v in vals if v >= 58)
+    core_ok = all((pillars.get(k) or 0) >= 52 for k in core_keys)
+    if strong >= min_strong and core_ok:
+        return score, label, False
+    return min(score, 68.5), "持有", True
+
+
 def _pillar_trend_short(snap: dict, reasons: list[str]) -> float:
     s = 50.0
     if snap.get("above_ma20"):
@@ -174,7 +192,6 @@ def score_short(snap: dict) -> dict:
     score = trend * 0.30 + momentum * 0.25 + volume * 0.20 + structure * 0.15 + risk * 0.10
     score = _clamp(score)
     label = label_from_score(score)
-    hold_days = "3–10 個交易日" if label == "買" else ("5–15 個交易日" if label == "持有" else "暫觀望 / 等更好位置")
 
     pillars = {
         "trend": round(trend, 1),
@@ -183,6 +200,11 @@ def score_short(snap: dict) -> dict:
         "structure": round(structure, 1),
         "risk": round(risk, 1),
     }
+    score, label, gated = _apply_buy_gate(score, label, pillars, 3, ["trend", "momentum"])
+    if gated:
+        reasons.insert(0, "確認不足：未達跨柱齊備，暫不標「買」")
+
+    hold_days = "3–10 個交易日" if label == "買" else ("5–15 個交易日" if label == "持有" else "暫觀望 / 等更好位置")
 
     return {
         "score": round(score, 1),
@@ -190,10 +212,10 @@ def score_short(snap: dict) -> dict:
         "reason": "；".join(reasons[:4]),
         "signals": reasons,
         "pillars": pillars,
-        "framework": "multi_pillar_v2",
+        "framework": "multi_pillar_v3",
         "horizon": "短線",
         "hold_period": hold_days,
-        "knowledge": _short_knowledge(label, pillars),
+        "knowledge": _short_knowledge(label, pillars, gated),
     }
 
 
@@ -307,7 +329,6 @@ def score_long(snap: dict, vs_spy_ret_20d: float | None = None, fundamentals: di
 
     score = _clamp(score)
     label = label_from_score(score, buy_at=72, avoid_below=42)
-    hold_days = "3–12 個月" if label == "買" else ("1–6 個月觀察" if label == "持有" else "長線暫避 / 等趨勢轉好")
 
     pillars = {
         "trend": round(s_trend, 1),
@@ -316,6 +337,11 @@ def score_long(snap: dict, vs_spy_ret_20d: float | None = None, fundamentals: di
         "risk": round(s_risk, 1),
         "quality": round(s_quality, 1) if fundamentals else None,
     }
+    score, label, gated = _apply_buy_gate(score, label, pillars, 3, ["trend", "relative"])
+    if gated:
+        reasons.insert(0, "確認不足：雙動能未齊，暫不標「買」")
+
+    hold_days = "3–12 個月" if label == "買" else ("1–6 個月觀察" if label == "持有" else "長線暫避 / 等趨勢轉好")
 
     return {
         "score": round(score, 1),
@@ -323,14 +349,14 @@ def score_long(snap: dict, vs_spy_ret_20d: float | None = None, fundamentals: di
         "reason": "；".join(reasons[:4]),
         "signals": reasons,
         "pillars": pillars,
-        "framework": "multi_pillar_v2",
+        "framework": "multi_pillar_v3",
         "horizon": "長線",
         "hold_period": hold_days,
-        "knowledge": _long_knowledge(label, vs_spy_ret_20d, pillars),
+        "knowledge": _long_knowledge(label, vs_spy_ret_20d, pillars, gated),
     }
 
 
-def _short_knowledge(label: str, pillars: dict) -> str:
+def _short_knowledge(label: str, pillars: dict, gated: bool = False) -> str:
     weak = [k for k, v in pillars.items() if v is not None and v < 45]
     strong = [k for k, v in pillars.items() if v is not None and v >= 65]
     tip = ""
@@ -339,18 +365,22 @@ def _short_knowledge(label: str, pillars: dict) -> str:
     if weak:
         tip += f"弱項：{'/'.join(weak)}。"
     if label == "買":
-        return f"多因子偏多（趨勢+動量+量能確認）。{tip}可用支撐作風險參考。"
+        return f"跨類別確認偏多。{tip}進場前訂止蝕（支撐下）同倉位（單筆風險≤本金2%）。"
     if label == "避開":
-        return f"多因子偏淡。{tip}宜等趨勢同動能重新对齐。"
+        return f"多因子偏淡。{tip}宜等趨勢同動能重新对齐，唔好抄底博反彈。"
+    if gated:
+        return f"分數尚可但確認不足。{tip}寧願錯過，唔好硬上。"
     return f"多因子中性。{tip}可觀望等待更多確認。"
 
 
-def _long_knowledge(label: str, rel: float | None, pillars: dict) -> str:
+def _long_knowledge(label: str, rel: float | None, pillars: dict, gated: bool = False) -> str:
     rel_txt = ""
     if rel is not None:
         rel_txt = "相對大市較強。" if rel > 0 else "相對大市偏弱。"
     if label == "買":
-        return f"雙動能框架偏多（絕對趨勢+相對強勢）。{rel_txt}用月線思維分批。"
+        return f"雙動能框架偏多（絕對趨勢+相對強勢）。{rel_txt}分批建倉；跌破MA200 重新評估。"
     if label == "避開":
         return f"長線框架偏淡。{rel_txt}可等重返MA200再說。"
+    if gated:
+        return f"分數尚可但確認不足。{rel_txt}等絕對+相對齊備再考慮加倉。"
     return f"長線中性。{rel_txt}核心倉可留，避免一次加倉。"

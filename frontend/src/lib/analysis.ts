@@ -56,6 +56,14 @@ export type Fundamentals = {
   debt_to_equity?: number | null;
 };
 
+export type InstitutionalInput = {
+  flow_score?: number | null;
+  net_pct_change?: number | null;
+  increasers?: number;
+  decreasers?: number;
+  institutions_percent?: number | null;
+};
+
 type Bar = { high: number; low: number; close: number; volume: number };
 
 function sma(values: number[], window: number): number | null {
@@ -124,6 +132,29 @@ function labelFromScore(score: number, buyAt = 70, avoidBelow = 40): ScoreResult
   if (score >= buyAt) return "買";
   if (score <= avoidBelow) return "避開";
   return "持有";
+}
+
+/** Profit discipline: 「買」需要跨類別確認，避免單一柱撐起假買訊。 */
+function applyBuyGate(
+  score: number,
+  label: ScoreResult["label"],
+  pillars: Record<string, number | null | undefined>,
+  minStrong: number,
+  coreKeys: string[]
+): { score: number; label: ScoreResult["label"]; gated: boolean } {
+  if (label !== "買") return { score, label, gated: false };
+  const vals = Object.entries(pillars)
+    .filter(([, v]) => v != null)
+    .map(([, v]) => v as number);
+  const strong = vals.filter((v) => v >= 58).length;
+  const coreOk = coreKeys.every((k) => (pillars[k] ?? 0) >= 52);
+  if (strong >= minStrong && coreOk) return { score, label, gated: false };
+  // Downgrade: keep score but force 持有 so list doesn't over-promise
+  return { score: Math.min(score, buyGateCap(score)), label: "持有", gated: true };
+}
+
+function buyGateCap(score: number) {
+  return Math.min(score, 68.5);
 }
 
 export function computeSnapshot(bars: Bar[]): Snapshot | null {
@@ -319,31 +350,45 @@ export function scoreShort(snap: Snapshot): ScoreResult {
   }
   risk = clamp(risk);
 
-  const score = clamp(trend * 0.3 + momentum * 0.25 + volume * 0.2 + structure * 0.15 + risk * 0.1);
-  const label = labelFromScore(score);
-  const pillars = { trend: round(trend, 1), momentum: round(momentum, 1), volume: round(volume, 1), structure: round(structure, 1), risk: round(risk, 1) };
+  let score = clamp(trend * 0.3 + momentum * 0.25 + volume * 0.2 + structure * 0.15 + risk * 0.1);
+  let label = labelFromScore(score);
+  const pillars = {
+    trend: round(trend, 1),
+    momentum: round(momentum, 1),
+    volume: round(volume, 1),
+    structure: round(structure, 1),
+    risk: round(risk, 1),
+  };
+  const gated = applyBuyGate(score, label, pillars, 3, ["trend", "momentum"]);
+  score = gated.score;
+  label = gated.label;
+  if (gated.gated) reasons.unshift("確認不足：未達跨柱齊備，暫不標「買」");
+
   return {
     score: round(score, 1),
     label,
     reason: reasons.slice(0, 4).join("；"),
     signals: reasons,
     pillars,
-    framework: "multi_pillar_v2",
+    framework: "multi_pillar_v3",
     horizon: "短線",
     hold_period: label === "買" ? "3–10 個交易日" : label === "持有" ? "5–15 個交易日" : "暫觀望 / 等更好位置",
     knowledge:
       label === "買"
-        ? "多因子偏多（趨勢+動量+量能確認）。可用支撐作風險參考。"
+        ? "跨類別確認偏多。進場前訂止蝕（支撐下）同倉位（單筆風險≤本金2%）。"
         : label === "避開"
-          ? "多因子偏淡。宜等趨勢同動能重新对齐。"
-          : "多因子中性。可觀望等待更多確認。",
+          ? "多因子偏淡。宜等趨勢同動能重新对齐，唔好抄底博反彈。"
+          : gated.gated
+            ? "分數尚可但確認不足。寧願錯過，唔好硬上。"
+            : "多因子中性。可觀望等待更多確認。",
   };
 }
 
 export function scoreLong(
   snap: Snapshot,
   vsSpyRet20d: number | null = null,
-  fundamentals: Fundamentals | null = null
+  fundamentals: Fundamentals | null = null,
+  institutional: InstitutionalInput | null = null
 ): ScoreResult {
   const reasons: string[] = [];
   let sTrend = 50;
@@ -455,17 +500,56 @@ export function scoreLong(
   }
   sQuality = clamp(sQuality);
 
-  const score = fundamentals
-    ? clamp(sTrend * 0.3 + sRel * 0.22 + sMom * 0.18 + sRisk * 0.12 + sQuality * 0.18)
-    : clamp(sTrend * 0.35 + sRel * 0.25 + sMom * 0.25 + sRisk * 0.15);
-  const label = labelFromScore(score, 72, 42);
+  let sInst = 50;
+  const hasInst = institutional?.flow_score != null;
+  if (hasInst) {
+    sInst = clamp(institutional!.flow_score!);
+    const net = institutional!.net_pct_change;
+    if (net != null) {
+      if (net > 2) reasons.push(`機構增持（加權約+${net}%）`);
+      else if (net < -2) reasons.push(`機構減持（加權約${net}%）`);
+    }
+    const inc = institutional!.increasers ?? 0;
+    const dec = institutional!.decreasers ?? 0;
+    if (inc > dec + 1) reasons.push(`增持機構${inc} vs 減持${dec}`);
+    else if (dec > inc + 1) reasons.push(`減持機構${dec} vs 增持${inc}`);
+    if (institutional!.institutions_percent != null) {
+      reasons.push(`機構持股${(institutional!.institutions_percent * 100).toFixed(0)}%`);
+    }
+  }
+  sInst = clamp(sInst);
+
+  let score: number;
+  if (fundamentals && hasInst) {
+    score = clamp(sTrend * 0.26 + sRel * 0.18 + sMom * 0.14 + sRisk * 0.1 + sQuality * 0.16 + sInst * 0.16);
+  } else if (fundamentals) {
+    score = clamp(sTrend * 0.3 + sRel * 0.22 + sMom * 0.18 + sRisk * 0.12 + sQuality * 0.18);
+  } else if (hasInst) {
+    score = clamp(sTrend * 0.3 + sRel * 0.22 + sMom * 0.18 + sRisk * 0.12 + sInst * 0.18);
+  } else {
+    score = clamp(sTrend * 0.35 + sRel * 0.25 + sMom * 0.25 + sRisk * 0.15);
+  }
+
+  let label = labelFromScore(score, 72, 42);
   const pillars = {
     trend: round(sTrend, 1),
     relative: round(sRel, 1),
     momentum: round(sMom, 1),
     risk: round(sRisk, 1),
     quality: fundamentals ? round(sQuality, 1) : null,
+    institutional: hasInst ? round(sInst, 1) : null,
   };
+  const gated = applyBuyGate(score, label, pillars, 3, ["trend", "relative"]);
+  score = gated.score;
+  label = gated.label;
+  if (gated.gated) reasons.unshift("確認不足：雙動能未齊，暫不標「買」");
+  // Heavy institutional distribution blocks buy
+  if (label === "買" && hasInst && sInst < 40) {
+    label = "持有";
+    score = Math.min(score, 68.5);
+    reasons.unshift("機構資金偏流出，暫降級為持有");
+  }
+
   const relTxt = vsSpyRet20d == null ? "" : vsSpyRet20d > 0 ? "相對大市較強。" : "相對大市偏弱。";
   return {
     score: round(score, 1),
@@ -473,14 +557,16 @@ export function scoreLong(
     reason: reasons.slice(0, 4).join("；"),
     signals: reasons,
     pillars,
-    framework: "multi_pillar_v2",
+    framework: "multi_pillar_v3",
     horizon: "長線",
     hold_period: label === "買" ? "3–12 個月" : label === "持有" ? "1–6 個月觀察" : "長線暫避 / 等趨勢轉好",
     knowledge:
       label === "買"
-        ? `雙動能框架偏多（絕對趨勢+相對強勢）。${relTxt}用月線思維分批。`
+        ? `雙動能+質素/機構確認偏多。${relTxt}分批建倉；跌破MA200 重新評估。`
         : label === "避開"
           ? `長線框架偏淡。${relTxt}可等重返MA200再說。`
-          : `長線中性。${relTxt}核心倉可留，避免一次加倉。`,
+          : gated.gated
+            ? `分數尚可但確認不足。${relTxt}等絕對+相對齊備再考慮加倉。`
+            : `長線中性。${relTxt}核心倉可留，避免一次加倉。`,
   };
 }

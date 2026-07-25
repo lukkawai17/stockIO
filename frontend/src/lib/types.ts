@@ -102,5 +102,25 @@ export type StockDetail = {
     link?: string;
     published_at?: string | null;
   }[];
+  institutional?: {
+    institutions_percent: number | null;
+    institutions_float_percent: number | null;
+    institutions_count: number | null;
+    insiders_percent: number | null;
+    report_date: string | null;
+    holders: {
+      organization: string;
+      pct_held: number;
+      pct_change: number;
+      position: number;
+      value: number;
+      report_date: string | null;
+    }[];
+    net_pct_change: number | null;
+    increasers: number;
+    decreasers: number;
+    flow_score: number | null;
+    summary: string;
+  } | null;
   disclaimer?: string;
 };

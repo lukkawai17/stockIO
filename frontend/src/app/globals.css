@@ -889,6 +889,43 @@ textarea {
   font-size: 16px;
 }
 
+.inst-table {
+  padding: 0 16px 14px;
+}
+
+.inst-head,
+.inst-row {
+  display: grid;
+  grid-template-columns: 1fr 64px 64px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.inst-head {
+  color: var(--secondary);
+  padding: 4px 0 8px;
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.inst-row {
+  padding: 8px 0;
+  color: var(--label);
+  border-bottom: 0.5px solid color-mix(in srgb, var(--separator) 70%, transparent);
+}
+
+.inst-row:last-child {
+  border-bottom: none;
+}
+
+.inst-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;

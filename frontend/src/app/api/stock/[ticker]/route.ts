@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { computeSnapshot, scoreLong, scoreShort } from "@/lib/analysis";
 import { buildChartPayload } from "@/lib/chartData";
+import { parseInstitutional } from "@/lib/institutional";
 import { findInScans } from "@/lib/scanStore";
 import { yahooFinance } from "@/lib/yahoo";
 
@@ -21,7 +22,14 @@ export async function GET(_req: Request, ctx: Ctx) {
       yahooFinance.chart("SPY", { period1, interval: "1d" }),
       yahooFinance
         .quoteSummary(ticker, {
-          modules: ["calendarEvents", "defaultKeyStatistics", "financialData", "summaryDetail"],
+          modules: [
+            "calendarEvents",
+            "defaultKeyStatistics",
+            "financialData",
+            "summaryDetail",
+            "institutionOwnership",
+            "majorHoldersBreakdown",
+          ],
         })
         .catch(() => null),
       yahooFinance.search(ticker).catch(() => null),
@@ -72,7 +80,8 @@ export async function GET(_req: Request, ctx: Ctx) {
         return d == null ? null : d > 5 ? d / 100 : d; // yahoo sometimes returns percent-like
       })(),
     };
-    const long = scoreLong(snap, rel, fundamentals);
+    const institutional = parseInstitutional(summary);
+    const long = scoreLong(snap, rel, fundamentals, institutional);
 
     // cached scan reserved for list pages; detail uses live multi-pillar + fundamentals
     void cached;
@@ -119,6 +128,7 @@ export async function GET(_req: Request, ctx: Ctx) {
         recent: [],
       },
       news,
+      institutional,
       hold_period_short: short.hold_period,
       hold_period_long: long.hold_period,
       disclaimer: "今晚贏鋪大,老婆仔女攞去賣!",
