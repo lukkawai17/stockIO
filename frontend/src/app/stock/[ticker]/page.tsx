@@ -9,6 +9,19 @@ import { LabelBadge } from "@/components/LabelBadge";
 import { StockChart } from "@/components/StockChart";
 import type { StockDetail } from "@/lib/types";
 
+function pillarName(key: string) {
+  const map: Record<string, string> = {
+    trend: "趨勢",
+    momentum: "動量",
+    volume: "量能",
+    structure: "結構",
+    risk: "風險",
+    relative: "相對",
+    quality: "質素",
+  };
+  return map[key] || key;
+}
+
 export default function StockDetailPage() {
   const params = useParams<{ ticker: string }>();
   const ticker = (params?.ticker || "").toUpperCase();
@@ -118,8 +131,23 @@ export default function StockDetailPage() {
           <dt>觀察期</dt>
           <dd>{data.short.hold_period}</dd>
         </div>
+        {data.short.pillars && (
+          <div className="pillar-grid">
+            {Object.entries(data.short.pillars)
+              .filter(([, v]) => v != null)
+              .map(([k, v]) => (
+                <div key={k} className="pillar-item">
+                  <span>{pillarName(k)}</span>
+                  <strong className={(v as number) >= 60 ? "up" : (v as number) <= 40 ? "down" : ""}>
+                    {(v as number).toFixed(0)}
+                  </strong>
+                </div>
+              ))}
+          </div>
+        )}
         <p className="group-footer" style={{ margin: "8px 16px 12px" }}>
-          {data.short.knowledge}
+          {data.short.knowledge}{" "}
+          <Link href="/learn#framework">了解框架</Link>
         </p>
         <div className="signal-wrap">
           {data.short.signals.map((s) => (
@@ -150,8 +178,23 @@ export default function StockDetailPage() {
           <dt>觀察期</dt>
           <dd>{data.long.hold_period}</dd>
         </div>
+        {data.long.pillars && (
+          <div className="pillar-grid">
+            {Object.entries(data.long.pillars)
+              .filter(([, v]) => v != null)
+              .map(([k, v]) => (
+                <div key={k} className="pillar-item">
+                  <span>{pillarName(k)}</span>
+                  <strong className={(v as number) >= 60 ? "up" : (v as number) <= 40 ? "down" : ""}>
+                    {(v as number).toFixed(0)}
+                  </strong>
+                </div>
+              ))}
+          </div>
+        )}
         <p className="group-footer" style={{ margin: "8px 16px 12px" }}>
-          {data.long.knowledge}
+          {data.long.knowledge}{" "}
+          <Link href="/learn#long">了解長線</Link>
         </p>
         <div className="signal-wrap">
           {data.long.signals.map((s) => (

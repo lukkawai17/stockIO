@@ -20,21 +20,40 @@ export type Snapshot = {
   macd_hist: number;
   ret_5d: number;
   ret_20d: number;
+  ret_63d: number;
   volume_ratio: number;
+  atr_pct: number | null;
+  dist_52w_high_pct: number | null;
+  drawdown_20d_pct: number;
+  ma_stack_bull: boolean;
+  ma_stack_bear: boolean;
+  golden_bias: boolean;
+  death_bias: boolean;
   support_resistance: SupportResistance;
   above_ma20: boolean;
   above_ma50: boolean;
   above_ma200: boolean | null;
 };
 
+export type Pillars = Record<string, number | null | undefined>;
+
 export type ScoreResult = {
   score: number;
   label: "買" | "持有" | "避開";
   reason: string;
   signals: string[];
+  pillars: Pillars;
+  framework: string;
   horizon: string;
   hold_period: string;
   knowledge: string;
+};
+
+export type Fundamentals = {
+  roe?: number | null;
+  pe?: number | null;
+  profit_margin?: number | null;
+  debt_to_equity?: number | null;
 };
 
 type Bar = { high: number; low: number; close: number; volume: number };
@@ -42,7 +61,6 @@ type Bar = { high: number; low: number; close: number; volume: number };
 function sma(values: number[], window: number): number | null {
   if (values.length < Math.max(2, Math.floor(window / 2))) return null;
   const slice = values.slice(-window);
-  if (slice.length < 2) return null;
   return slice.reduce((a, b) => a + b, 0) / slice.length;
 }
 
@@ -50,9 +68,7 @@ function emaSeries(values: number[], span: number): number[] {
   if (!values.length) return [];
   const k = 2 / (span + 1);
   const out = [values[0]];
-  for (let i = 1; i < values.length; i++) {
-    out.push(values[i] * k + out[i - 1] * (1 - k));
-  }
+  for (let i = 1; i < values.length; i++) out.push(values[i] * k + out[i - 1] * (1 - k));
   return out;
 }
 
@@ -65,12 +81,10 @@ function rsi(closes: number[], period = 14): number {
     if (d >= 0) gains += d;
     else losses -= d;
   }
-  let avgGain = gains / period;
-  let avgLoss = losses / period;
-  // Wilder smoothing for remaining not applied fully; good enough for detail view
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
   if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
+  return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
 function supportResistance(bars: Bar[]): SupportResistance {
@@ -86,11 +100,9 @@ function supportResistance(bars: Bar[]): SupportResistance {
   const s1 = 2 * pivot - prev.high;
   const r2 = pivot + (prev.high - prev.low);
   const s2 = pivot - (prev.high - prev.low);
-  const support = Math.min(recentLow, s1, s2);
-  const resistance = Math.max(recentHigh, r1, r2);
   return {
-    support: round(support),
-    resistance: round(resistance),
+    support: round(Math.min(recentLow, s1, s2)),
+    resistance: round(Math.max(recentHigh, r1, r2)),
     pivot: round(pivot),
     near_support: round(Math.min(s1, recentLow)),
     near_resistance: round(Math.max(r1, recentHigh)),
@@ -117,6 +129,8 @@ function labelFromScore(score: number, buyAt = 70, avoidBelow = 40): ScoreResult
 export function computeSnapshot(bars: Bar[]): Snapshot | null {
   if (bars.length < 30) return null;
   const closes = bars.map((b) => b.close);
+  const highs = bars.map((b) => b.high);
+  const lows = bars.map((b) => b.low);
   const volumes = bars.map((b) => b.volume);
   const last = closes[closes.length - 1];
   const prev = closes[closes.length - 2] || last;
@@ -134,9 +148,27 @@ export function computeSnapshot(bars: Bar[]): Snapshot | null {
   const macdHist = macd - macdSignal;
   const ret5 = closes.length > 5 ? ((last - closes[closes.length - 6]) / closes[closes.length - 6]) * 100 : 0;
   const ret20 = closes.length > 20 ? ((last - closes[closes.length - 21]) / closes[closes.length - 21]) * 100 : 0;
+  const ret63 = closes.length > 63 ? ((last - closes[closes.length - 64]) / closes[closes.length - 64]) * 100 : 0;
   const volAvg = sma(volumes, 20) || 1;
   const volRatio = volumes[volumes.length - 1] / volAvg;
-  const sr = supportResistance(bars);
+
+  // ATR%
+  let atrSum = 0;
+  let atrN = 0;
+  for (let i = Math.max(1, closes.length - 14); i < closes.length; i++) {
+    const tr = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i] - closes[i - 1])
+    );
+    atrSum += tr;
+    atrN++;
+  }
+  const atrPct = atrN ? round((atrSum / atrN / last) * 100) : null;
+  const high52 = Math.max(...highs.slice(-Math.min(252, highs.length)));
+  const dist52 = high52 ? round(((high52 - last) / high52) * 100) : null;
+  const peak20 = Math.max(...closes.slice(-21));
+  const dd20 = peak20 ? round(((last - peak20) / peak20) * 100) : 0;
 
   return {
     price: round(last),
@@ -150,8 +182,16 @@ export function computeSnapshot(bars: Bar[]): Snapshot | null {
     macd_hist: round(macdHist, 3),
     ret_5d: round(ret5),
     ret_20d: round(ret20),
+    ret_63d: round(ret63),
     volume_ratio: round(volRatio),
-    support_resistance: sr,
+    atr_pct: atrPct,
+    dist_52w_high_pct: dist52,
+    drawdown_20d_pct: dd20,
+    ma_stack_bull: last > ma20 && ma20 > ma50,
+    ma_stack_bear: last < ma20 && ma20 < ma50,
+    golden_bias: ma200 != null && ma50 > ma200,
+    death_bias: ma200 != null && ma50 < ma200,
+    support_resistance: supportResistance(bars),
     above_ma20: last > ma20,
     above_ma50: last > ma50,
     above_ma200: ma200 == null ? null : last > ma200,
@@ -159,142 +199,288 @@ export function computeSnapshot(bars: Bar[]): Snapshot | null {
 }
 
 export function scoreShort(snap: Snapshot): ScoreResult {
-  let score = 50;
   const reasons: string[] = [];
+  let trend = 50;
   if (snap.above_ma20) {
-    score += 10;
-    reasons.push("企穩20日線");
+    trend += 14;
+    reasons.push("企穩MA20（短線趨勢）");
   } else {
-    score -= 10;
-    reasons.push("跌破20日線");
+    trend -= 14;
+    reasons.push("跌破MA20");
   }
   if (snap.above_ma50) {
-    score += 8;
-    reasons.push("高於50日線");
+    trend += 12;
+    reasons.push("高於MA50");
   } else {
-    score -= 8;
-    reasons.push("低於50日線");
+    trend -= 12;
+    reasons.push("低於MA50");
   }
-  const { rsi: r } = snap;
+  if (snap.ma_stack_bull) {
+    trend += 10;
+    reasons.push("均線多頭排列");
+  } else if (snap.ma_stack_bear) {
+    trend -= 8;
+    reasons.push("均線空頭排列");
+  }
+  if (snap.above_ma200 === true && snap.above_ma50) {
+    trend += 6;
+    reasons.push("順大趨勢（MA200上）");
+  } else if (snap.above_ma200 === false) {
+    trend -= 6;
+    reasons.push("逆大趨勢（MA200下）");
+  }
+  trend = clamp(trend);
+
+  let momentum = 50;
+  const r = snap.rsi;
   if (r >= 45 && r <= 65) {
-    score += 12;
+    momentum += 14;
     reasons.push(`RSI健康(${r})`);
   } else if (r >= 35 && r < 45) {
-    score += 6;
-    reasons.push(`RSI回調中(${r})`);
+    momentum += 6;
+    reasons.push(`RSI回調區(${r})`);
   } else if (r > 72) {
-    score -= 14;
+    momentum -= 16;
     reasons.push(`RSI超買(${r})`);
   } else if (r < 30) {
-    score -= 8;
+    momentum -= 8;
     reasons.push(`RSI超賣(${r})`);
-  } else reasons.push(`RSI ${r}`);
-
+  }
   if (snap.macd_hist > 0 && snap.macd > snap.macd_signal) {
-    score += 10;
-    reasons.push("MACD偏多");
+    momentum += 12;
+    reasons.push("MACD動能偏多");
   } else if (snap.macd_hist < 0) {
-    score -= 10;
-    reasons.push("MACD偏淡");
+    momentum -= 12;
+    reasons.push("MACD動能偏淡");
   }
   if (snap.ret_5d > 2) {
-    score += 8;
+    momentum += 8;
     reasons.push(`近5日+${snap.ret_5d}%`);
   } else if (snap.ret_5d < -3) {
-    score -= 10;
+    momentum -= 10;
     reasons.push(`近5日${snap.ret_5d}%`);
   }
+  if (snap.dist_52w_high_pct != null) {
+    if (snap.dist_52w_high_pct <= 8) {
+      momentum += 6;
+      reasons.push("接近52週高（相對強勢）");
+    } else if (snap.dist_52w_high_pct > 35) {
+      momentum -= 6;
+      reasons.push("遠離52週高（相對弱勢）");
+    }
+  }
+  momentum = clamp(momentum);
+
+  let volume = 50;
   if (snap.volume_ratio >= 1.4 && snap.ret_5d > 0) {
-    score += 6;
-    reasons.push("放量上攻");
+    volume += 18;
+    reasons.push("放量上攻（參與度確認）");
   } else if (snap.volume_ratio >= 1.4 && snap.ret_5d < 0) {
-    score -= 6;
-    reasons.push("放量下跌");
+    volume -= 16;
+    reasons.push("放量下跌（拋壓確認）");
+  } else if (snap.volume_ratio < 0.7) {
+    volume -= 6;
+    reasons.push("成交偏淡");
+  } else {
+    volume += 4;
+    reasons.push("成交量正常");
   }
-  if (snap.support_resistance.distance_to_support_pct <= 2) {
-    score += 4;
-    reasons.push("接近支撐");
+  volume = clamp(volume);
+
+  let structure = 50;
+  const ds = snap.support_resistance.distance_to_support_pct;
+  const dr = snap.support_resistance.distance_to_resistance_pct;
+  if (ds <= 2) {
+    structure += 14;
+    reasons.push("接近支撐（結構較佳觀察位）");
   }
-  if (snap.support_resistance.distance_to_resistance_pct <= 1.5) {
-    score -= 4;
-    reasons.push("接近阻力");
+  if (dr <= 1.5) {
+    structure -= 14;
+    reasons.push("貼近阻力（冲關風險）");
+  } else if (dr >= 8) {
+    structure += 6;
+    reasons.push("距離阻力有空間");
   }
-  score = clamp(score);
+  structure = clamp(structure);
+
+  let risk = 55;
+  if (snap.atr_pct != null) {
+    if (snap.atr_pct >= 1 && snap.atr_pct <= 3.5) {
+      risk += 12;
+      reasons.push(`波幅適中(ATR ${snap.atr_pct}%)`);
+    } else if (snap.atr_pct > 6) {
+      risk -= 16;
+      reasons.push(`波幅偏高(ATR ${snap.atr_pct}%)`);
+    }
+  }
+  if (snap.drawdown_20d_pct <= -12) {
+    risk -= 10;
+    reasons.push("近月回撤偏深");
+  }
+  risk = clamp(risk);
+
+  const score = clamp(trend * 0.3 + momentum * 0.25 + volume * 0.2 + structure * 0.15 + risk * 0.1);
   const label = labelFromScore(score);
+  const pillars = { trend: round(trend, 1), momentum: round(momentum, 1), volume: round(volume, 1), structure: round(structure, 1), risk: round(risk, 1) };
   return {
     score: round(score, 1),
     label,
-    reason: reasons.slice(0, 3).join("；"),
+    reason: reasons.slice(0, 4).join("；"),
     signals: reasons,
+    pillars,
+    framework: "multi_pillar_v2",
     horizon: "短線",
     hold_period: label === "買" ? "3–10 個交易日" : label === "持有" ? "5–15 個交易日" : "暫觀望 / 等更好位置",
     knowledge:
       label === "買"
-        ? "短線偏多：價格結構向上，適合用較細倉位試，並設止蝕喺近期支撐之下。"
+        ? "多因子偏多（趨勢+動量+量能確認）。可用支撐作風險參考。"
         : label === "避開"
-          ? "短線偏淡：動能或均線轉弱，寧願等站回關鍵均線或企穩支撐再睇。"
-          : "結構中性：可以持有觀望，等 MACD / 均線方向更清晰。",
+          ? "多因子偏淡。宜等趨勢同動能重新对齐。"
+          : "多因子中性。可觀望等待更多確認。",
   };
 }
 
-export function scoreLong(snap: Snapshot, vsSpyRet20d: number | null = null): ScoreResult {
-  let score = 50;
+export function scoreLong(
+  snap: Snapshot,
+  vsSpyRet20d: number | null = null,
+  fundamentals: Fundamentals | null = null
+): ScoreResult {
   const reasons: string[] = [];
+  let sTrend = 50;
   if (snap.above_ma200 === true) {
-    score += 18;
-    reasons.push("站上200日線（長線趨勢向上）");
+    sTrend += 22;
+    reasons.push("絕對動能：站上MA200");
   } else if (snap.above_ma200 === false) {
-    score -= 18;
-    reasons.push("跌破200日線（長線趨勢轉弱）");
-  } else reasons.push("200日線數據不足");
-
+    sTrend -= 22;
+    reasons.push("絕對動能弱：跌破MA200");
+  }
   if (snap.above_ma50) {
-    score += 10;
-    reasons.push("高於50日線");
+    sTrend += 10;
+    reasons.push("高於MA50");
   } else {
-    score -= 10;
-    reasons.push("低於50日線");
+    sTrend -= 10;
+    reasons.push("低於MA50");
   }
-  if (snap.ret_20d > 3) {
-    score += 10;
-    reasons.push(`近月+${snap.ret_20d}%`);
-  } else if (snap.ret_20d < -5) {
-    score -= 12;
-    reasons.push(`近月${snap.ret_20d}%`);
+  if (snap.golden_bias) {
+    sTrend += 8;
+    reasons.push("MA50>MA200（偏金叉結構）");
+  } else if (snap.death_bias) {
+    sTrend -= 8;
+    reasons.push("MA50<MA200（偏死叉結構）");
   }
+  sTrend = clamp(sTrend);
+
+  let sRel = 50;
   if (vsSpyRet20d != null) {
-    if (vsSpyRet20d > 2) {
-      score += 10;
-      reasons.push(`相對大市強 ${vsSpyRet20d > 0 ? "+" : ""}${vsSpyRet20d.toFixed(1)}%`);
-    } else if (vsSpyRet20d < -2) {
-      score -= 10;
-      reasons.push(`相對大市弱 ${vsSpyRet20d.toFixed(1)}%`);
+    if (vsSpyRet20d > 3) {
+      sRel += 18;
+      reasons.push(`相對動能強 vs SPY ${vsSpyRet20d > 0 ? "+" : ""}${vsSpyRet20d.toFixed(1)}%`);
+    } else if (vsSpyRet20d > 0) {
+      sRel += 8;
+      reasons.push(`略強過大市 ${vsSpyRet20d.toFixed(1)}%`);
+    } else if (vsSpyRet20d < -3) {
+      sRel -= 18;
+      reasons.push(`相對動能弱 vs SPY ${vsSpyRet20d.toFixed(1)}%`);
+    } else {
+      sRel -= 6;
+      reasons.push("相對大市偏弱");
     }
   }
-  if (snap.rsi > 75) {
-    score -= 8;
-    reasons.push("偏熱，注意回調");
-  } else if (snap.rsi >= 40 && snap.rsi <= 65) {
-    score += 6;
-    reasons.push("動能未過熱");
+  sRel = clamp(sRel);
+
+  let sMom = 50;
+  if (snap.ret_20d > 3) {
+    sMom += 10;
+    reasons.push(`近月+${snap.ret_20d}%`);
+  } else if (snap.ret_20d < -5) {
+    sMom -= 12;
+    reasons.push(`近月${snap.ret_20d}%`);
   }
-  score = clamp(score);
+  if (snap.ret_63d > 8) {
+    sMom += 10;
+    reasons.push(`近季+${snap.ret_63d}%`);
+  } else if (snap.ret_63d < -12) {
+    sMom -= 10;
+    reasons.push(`近季${snap.ret_63d}%`);
+  }
+  if (snap.rsi > 75) {
+    sMom -= 10;
+    reasons.push("長線過熱風險");
+  } else if (snap.rsi >= 40 && snap.rsi <= 65) sMom += 6;
+  sMom = clamp(sMom);
+
+  let sRisk = 55;
+  if (snap.atr_pct != null) {
+    if (snap.atr_pct >= 1 && snap.atr_pct <= 3.5) {
+      sRisk += 12;
+      reasons.push(`波幅適中(ATR ${snap.atr_pct}%)`);
+    } else if (snap.atr_pct > 6) {
+      sRisk -= 16;
+      reasons.push(`波幅偏高(ATR ${snap.atr_pct}%)`);
+    }
+  }
+  sRisk = clamp(sRisk);
+
+  let sQuality = 50;
+  if (fundamentals) {
+    if (fundamentals.roe != null) {
+      if (fundamentals.roe >= 0.15) {
+        sQuality += 14;
+        reasons.push(`質素：ROE ${(fundamentals.roe * 100).toFixed(0)}%`);
+      } else if (fundamentals.roe < 0) {
+        sQuality -= 12;
+        reasons.push("質素弱：ROE 負數");
+      }
+    }
+    if (fundamentals.profit_margin != null) {
+      if (fundamentals.profit_margin >= 0.12) sQuality += 8;
+      else if (fundamentals.profit_margin < 0) sQuality -= 8;
+    }
+    if (fundamentals.pe != null && fundamentals.pe > 0) {
+      if (fundamentals.pe >= 8 && fundamentals.pe <= 28) {
+        sQuality += 6;
+        reasons.push(`估值合理 PE ${fundamentals.pe.toFixed(1)}`);
+      } else if (fundamentals.pe > 45) {
+        sQuality -= 8;
+        reasons.push(`估值偏貴 PE ${fundamentals.pe.toFixed(1)}`);
+      }
+    }
+    if (fundamentals.debt_to_equity != null) {
+      if (fundamentals.debt_to_equity < 1) sQuality += 6;
+      else if (fundamentals.debt_to_equity > 2.5) {
+        sQuality -= 8;
+        reasons.push("槓桿偏高");
+      }
+    }
+  }
+  sQuality = clamp(sQuality);
+
+  const score = fundamentals
+    ? clamp(sTrend * 0.3 + sRel * 0.22 + sMom * 0.18 + sRisk * 0.12 + sQuality * 0.18)
+    : clamp(sTrend * 0.35 + sRel * 0.25 + sMom * 0.25 + sRisk * 0.15);
   const label = labelFromScore(score, 72, 42);
-  const trend = snap.above_ma200 ? "升市趨勢" : "弱勢或整理";
-  const relTxt =
-    vsSpyRet20d == null ? "" : vsSpyRet20d > 0 ? "相對大市較強。" : "相對大市偏弱。";
+  const pillars = {
+    trend: round(sTrend, 1),
+    relative: round(sRel, 1),
+    momentum: round(sMom, 1),
+    risk: round(sRisk, 1),
+    quality: fundamentals ? round(sQuality, 1) : null,
+  };
+  const relTxt = vsSpyRet20d == null ? "" : vsSpyRet20d > 0 ? "相對大市較強。" : "相對大市偏弱。";
   return {
     score: round(score, 1),
     label,
-    reason: reasons.slice(0, 3).join("；"),
+    reason: reasons.slice(0, 4).join("；"),
     signals: reasons,
+    pillars,
+    framework: "multi_pillar_v2",
     horizon: "長線",
     hold_period: label === "買" ? "3–12 個月" : label === "持有" ? "1–6 個月觀察" : "長線暫避 / 等趨勢轉好",
     knowledge:
       label === "買"
-        ? `長線偏多（${trend}）。${relTxt}適合分批布局，用月線思維，唔好用日線情緒追高。`
+        ? `雙動能框架偏多（絕對趨勢+相對強勢）。${relTxt}用月線思維分批。`
         : label === "避開"
-          ? `長線偏淡（${trend}）。${relTxt}可先觀望，等重返50/200日線再說。`
-          : `長線中性（${trend}）。${relTxt}可持有核心倉，避免一次過加大倉位。`,
+          ? `長線框架偏淡。${relTxt}可等重返MA200再說。`
+          : `長線中性。${relTxt}核心倉可留，避免一次加倉。`,
   };
 }

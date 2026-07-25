@@ -19,7 +19,11 @@ export async function GET(_req: Request, ctx: Ctx) {
     const [chart, spyChart, summary, search, cached] = await Promise.all([
       yahooFinance.chart(ticker, { period1, interval: "1d" }),
       yahooFinance.chart("SPY", { period1, interval: "1d" }),
-      yahooFinance.quoteSummary(ticker, { modules: ["calendarEvents"] }).catch(() => null),
+      yahooFinance
+        .quoteSummary(ticker, {
+          modules: ["calendarEvents", "defaultKeyStatistics", "financialData", "summaryDetail"],
+        })
+        .catch(() => null),
       yahooFinance.search(ticker).catch(() => null),
       findInScans(ticker),
     ]);
@@ -54,24 +58,24 @@ export async function GET(_req: Request, ctx: Ctx) {
       spySnap != null ? Math.round((snap.ret_20d - spySnap.ret_20d) * 100) / 100 : null;
 
     const short = scoreShort(snap);
-    const long = scoreLong(snap, rel);
+    const num = (v: unknown): number | null => {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const fundamentals = {
+      roe: num(summary?.defaultKeyStatistics?.returnOnEquity ?? summary?.financialData?.returnOnEquity),
+      pe: num(summary?.summaryDetail?.trailingPE ?? summary?.defaultKeyStatistics?.trailingPE),
+      profit_margin: num(summary?.defaultKeyStatistics?.profitMargins ?? summary?.financialData?.profitMargins),
+      debt_to_equity: (() => {
+        const d = num(summary?.financialData?.debtToEquity);
+        return d == null ? null : d > 5 ? d / 100 : d; // yahoo sometimes returns percent-like
+      })(),
+    };
+    const long = scoreLong(snap, rel, fundamentals);
 
-    if (cached.short) {
-      short.score = cached.short.score;
-      short.label = cached.short.label;
-      short.reason = cached.short.reason;
-      if (cached.short.hold_period) short.hold_period = cached.short.hold_period;
-      if (cached.short.knowledge) short.knowledge = cached.short.knowledge;
-      if (cached.short.signals) short.signals = cached.short.signals;
-    }
-    if (cached.long) {
-      long.score = cached.long.score;
-      long.label = cached.long.label;
-      long.reason = cached.long.reason;
-      if (cached.long.hold_period) long.hold_period = cached.long.hold_period;
-      if (cached.long.knowledge) long.knowledge = cached.long.knowledge;
-      if (cached.long.signals) long.signals = cached.long.signals;
-    }
+    // cached scan reserved for list pages; detail uses live multi-pillar + fundamentals
+    void cached;
 
     const earningsDate = summary?.calendarEvents?.earnings?.earningsDate?.[0];
     const news =

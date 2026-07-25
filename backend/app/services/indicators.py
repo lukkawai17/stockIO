@@ -84,32 +84,71 @@ def compute_snapshot(df: pd.DataFrame) -> dict | None:
 
     ret_5 = float(close.pct_change(5).iloc[-1] * 100) if len(close) > 5 else 0.0
     ret_20 = float(close.pct_change(20).iloc[-1] * 100) if len(close) > 20 else 0.0
+    ret_63 = float(close.pct_change(63).iloc[-1] * 100) if len(close) > 63 else 0.0
     if pd.isna(ret_5):
         ret_5 = 0.0
     if pd.isna(ret_20):
         ret_20 = 0.0
+    if pd.isna(ret_63):
+        ret_63 = 0.0
 
     vol_last = last_val(volume) or 0.0
     vol_avg = last_val(vol_ma20) or 1.0
     vol_ratio = vol_last / vol_avg if vol_avg else 1.0
+
+    # ATR(14) as % of price
+    prev_close = close.shift(1)
+    tr = pd.concat(
+        [
+            (high - low).abs(),
+            (high - prev_close).abs(),
+            (low - prev_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    atr = tr.rolling(14, min_periods=7).mean()
+    atr_last = last_val(atr)
+    atr_pct = round((atr_last / last) * 100, 2) if atr_last and last else None
+
+    high_52w = float(high.tail(252).max()) if len(high) >= 20 else float(high.max())
+    dist_52w = round((high_52w - last) / high_52w * 100, 2) if high_52w else None
+
+    m20 = last_val(ma20) or last
+    m50 = last_val(ma50) or last
+    m200 = last_val(ma200)
+    ma_stack_bull = last > m20 > m50
+    ma_stack_bear = last < m20 < m50
+    golden_bias = m200 is not None and m50 > m200
+    death_bias = m200 is not None and m50 < m200
+
+    peak_20 = float(close.tail(21).max()) if len(close) > 5 else last
+    drawdown_20 = round((last - peak_20) / peak_20 * 100, 2) if peak_20 else 0.0
 
     sr = support_resistance(high, low, close)
 
     return {
         "price": round(last, 2),
         "change_pct": round(change_pct, 2),
-        "ma20": round(last_val(ma20) or last, 2),
-        "ma50": round(last_val(ma50) or last, 2),
-        "ma200": round(last_val(ma200) or last, 2) if last_val(ma200) else None,
+        "ma20": round(m20, 2),
+        "ma50": round(m50, 2),
+        "ma200": round(m200, 2) if m200 else None,
         "rsi": round(last_val(rsi14) or 50.0, 1),
         "macd": round(last_val(macd_line) or 0.0, 3),
         "macd_signal": round(last_val(macd_signal) or 0.0, 3),
         "macd_hist": round(last_val(macd_hist) or 0.0, 3),
         "ret_5d": round(ret_5, 2),
         "ret_20d": round(ret_20, 2),
+        "ret_63d": round(ret_63, 2),
         "volume_ratio": round(vol_ratio, 2),
+        "atr_pct": atr_pct,
+        "dist_52w_high_pct": dist_52w,
+        "drawdown_20d_pct": drawdown_20,
+        "ma_stack_bull": ma_stack_bull,
+        "ma_stack_bear": ma_stack_bear,
+        "golden_bias": golden_bias,
+        "death_bias": death_bias,
         "support_resistance": sr,
-        "above_ma20": last > (last_val(ma20) or last),
-        "above_ma50": last > (last_val(ma50) or last),
-        "above_ma200": (last > last_val(ma200)) if last_val(ma200) else None,
+        "above_ma20": last > m20,
+        "above_ma50": last > m50,
+        "above_ma200": (last > m200) if m200 else None,
     }

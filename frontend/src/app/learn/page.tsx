@@ -5,310 +5,250 @@ export default function LearnPage() {
     <section>
       <h1 className="large-title">知識</h1>
       <p className="page-sub">
-        新手教學：解釋 stockIO 用緊咩分析方法、每項代表咩意思、同你喺 App 邊度見到。
+        深度教學：stockIO 用「多因子混搭」框架，結合學術常見因子同實務技術確認法，而唔係單一指標。
       </p>
 
       <p className="group-header">目錄</p>
       <div className="inset-list learn-toc">
-        <a className="news-row" href="#overview">
-          <strong>1. App 整體點運作</strong>
-          <p className="meta">掃描 → 計分 → 建議</p>
+        <a className="news-row" href="#why">
+          <strong>1. 點解要混搭？</strong>
+          <p className="meta">單一指標不可靠嘅原因</p>
         </a>
-        <a className="news-row" href="#labels">
-          <strong>2. 買 / 持有 / 避開 + 分數</strong>
-          <p className="meta">標籤點解會咁顯示</p>
+        <a className="news-row" href="#framework">
+          <strong>2. stockIO 多因子框架</strong>
+          <p className="meta">短線 5 柱 · 長線雙動能+質素</p>
+        </a>
+        <a className="news-row" href="#research">
+          <strong>3. 研究靈感從邊嚟</strong>
+          <p className="meta">學術 / 實務概念（精簡）</p>
         </a>
         <a className="news-row" href="#short">
-          <strong>3. 短線技術指標</strong>
-          <p className="meta">MA · RSI · MACD · 成交量 · 動量</p>
+          <strong>4. 短線每柱點計</strong>
+          <p className="meta">趨勢·動量·量能·結構·風險</p>
         </a>
         <a className="news-row" href="#long">
-          <strong>4. 長線 / ETF 趨勢</strong>
-          <p className="meta">50/200 日線 · 相對大市</p>
+          <strong>5. 長線每柱點計</strong>
+          <p className="meta">絕對/相對動能·質素</p>
         </a>
         <a className="news-row" href="#sr">
-          <strong>5. 支撐 / 阻力（重點）</strong>
-          <p className="meta">虛線係咩、點用</p>
+          <strong>6. 支撐 / 阻力</strong>
+          <p className="meta">詳解 + 點用</p>
         </a>
         <a className="news-row" href="#chart">
-          <strong>6. 走勢圖點睇</strong>
-          <p className="meta">股價 · MA20 · MA50</p>
+          <strong>7. 圖表圖例</strong>
+          <p className="meta">價·MA·虛線</p>
         </a>
-        <a className="news-row" href="#extra">
-          <strong>7. 財報 · 新聞 · 觀察期</strong>
-          <p className="meta">詳情頁其他資訊</p>
-        </a>
-        <a className="news-row" href="#howto">
-          <strong>8. 新手建議用法</strong>
-          <p className="meta">實際操作流程</p>
+        <a className="news-row" href="#limits">
+          <strong>8. 限制同正確心態</strong>
+          <p className="meta">可信度邊界</p>
         </a>
       </div>
 
-      <p id="overview" className="group-header">
-        1. App 整體點運作
+      <p id="why" className="group-header">
+        1. 點解要混搭？（唔好信單一指標）
       </p>
       <article className="learn-card">
         <p>
-          stockIO 唔使你自己先揀股票。系統會掃描一個美股池（大約 S&P / Nasdaq 高流通股 + 主要
-          ETF），用公開市場數據計出技術分數，再排出：
+          只睇 RSI、或者只睇一條均線，好易「假訊號」。實務上較穩陣嘅做法係：
+          <strong>唔同類資訊互相確認</strong>——趨勢答「方向」、動量答「力道」、成交量答「有冇人參與」、結構答「價位優唔優」、風險答「波幅大唔大」。
         </p>
+        <p>
+          學術同機構常用嘅「多因子」思維亦類似：Value / Quality / Momentum / Low-volatility
+          等因子本身有週期性，單因子會長時間失效；混搭可以降低單一風格嘅回撤（常見討論見 Asness 等關於 multi-factor 嘅研究脈絡，以及 Fama–French / Carhart 動量因子傳統）。
+        </p>
+        <p className="learn-tip">stockIO 短線偏「技術確認混搭」；長線偏「趨勢+相對動能（雙動能味）+ 可選基本面質素」。</p>
+      </article>
+
+      <p id="framework" className="group-header">
+        2. stockIO 而家嘅框架（v2）
+      </p>
+      <article className="learn-card">
+        <h3>短線：五柱加權</h3>
+        <div className="inset-list" style={{ margin: "10px 0 14px" }}>
+          <div className="inset-row">
+            <dt>趨勢 Trend 30%</dt>
+            <dd>MA20/50/200、均線排列</dd>
+          </div>
+          <div className="inset-row">
+            <dt>動量 Momentum 25%</dt>
+            <dd>RSI、MACD、近況回報、距52週高</dd>
+          </div>
+          <div className="inset-row">
+            <dt>量能 Volume 20%</dt>
+            <dd>放量上攻 / 放量下跌</dd>
+          </div>
+          <div className="inset-row">
+            <dt>結構 Structure 15%</dt>
+            <dd>距離支撐 / 阻力</dd>
+          </div>
+          <div className="inset-row">
+            <dt>風險 Risk 10%</dt>
+            <dd>ATR 波幅、近月回撤</dd>
+          </div>
+        </div>
+        <h3>長線：雙動能 + 風險（詳情頁可加質素）</h3>
         <ul className="learn-list">
           <li>
-            <strong>偏多（買）</strong>：短線或長線結構較好
+            <strong>絕對動能</strong>：價 vs MA200 / MA50（趨勢跟隨）
           </li>
           <li>
-            <strong>偏淡（避開）</strong>：結構偏弱，宜觀望
+            <strong>相對動能</strong>：近月表現 vs SPY（強弱比較）
           </li>
           <li>
-            <strong>最高分</strong>：分數由高到低排序
+            <strong>中期動量</strong>：近月 / 近季回報 + 唔好過熱
+          </li>
+          <li>
+            <strong>風險</strong>：ATR 波幅是否極端
+          </li>
+          <li>
+            <strong>質素/估值</strong>（詳情頁）：ROE、利潤率、PE、槓桿（有數據先計）
           </li>
         </ul>
         <p>
-          分數會定時更新（GitHub Actions）；開市期間報價大約每 3 分鐘刷新。你加「關注」嘅清單只存在你部手機，唔使登入。
+          最終分數 0–100 → <strong>買 / 持有 / 避開</strong>。短線買約 ≥70；長線較嚴約 ≥72。
         </p>
         <p className="learn-tip">
-          喺邊度睇：底部 Tab → 短線 / 長線；撳股票進入詳情。
+          詳情頁會顯示各柱分數，方便你睇「邊度強、邊度弱」，而唔止一個總分。
         </p>
       </article>
 
-      <p id="labels" className="group-header">
-        2. 買 / 持有 / 避開 + 分數
+      <p id="research" className="group-header">
+        3. 研究靈感（精簡、可追溯概念）
       </p>
       <article className="learn-card">
+        <ul className="learn-list">
+          <li>
+            <strong>Trend + Momentum + Volume confirmation</strong>：實務教科書式「跨類別確認」，避免疊幾個同類震盪指標。
+          </li>
+          <li>
+            <strong>Dual momentum 味道</strong>：同時要求「自己向上」（絕對）同「強過基準」（相對）——接近 Gary Antonacci 雙動能嘅精神，但實作簡化成 MA200 + vs SPY。
+          </li>
+          <li>
+            <strong>Cross-sectional momentum</strong>：接近 52 週高、近月/近季強勢，呼應動量因子文獻（例如 Carhart 動量傳統）。
+          </li>
+          <li>
+            <strong>Quality / Value soft overlay</strong>：詳情頁用 ROE、利潤率、PE、負債作質素/估值微調（Quality–Value 多因子思維嘅零售簡化版）。
+          </li>
+          <li>
+            <strong>Low-volatility awareness</strong>：ATR 過高扣分，呼應低波幅因子「極端波動唔一定好」。
+          </li>
+          <li>
+            <strong>基本面+技術混合篩選</strong>：有實證討論指混合過濾可改善風險調整後表現（唔保證未來）。
+          </li>
+        </ul>
         <p>
-          每隻股有一個 <strong>0–100 分</strong>。分數愈高，代表喺我哋設定嘅規則下「偏多訊號」愈多。
+          重要：以上係<strong>設計靈感</strong>，stockIO 並非完整複製任何論文策略，亦冇做完整樣本外回測保證。
         </p>
-        <div className="inset-list" style={{ margin: "12px 0" }}>
-          <div className="inset-row">
-            <dt>買</dt>
-            <dd>短線約 ≥70；長線更嚴約 ≥72</dd>
-          </div>
-          <div className="inset-row">
-            <dt>持有</dt>
-            <dd>中間分數，方向未夠清晰</dd>
-          </div>
-          <div className="inset-row">
-            <dt>避開</dt>
-            <dd>短線約 ≤40；長線約 ≤42</dd>
-          </div>
-        </div>
-        <p>
-          「原因」會用一句粵語摘要（例如企穩20日線、RSI 健康、MACD 偏多）。詳情頁有完整訊號清單同簡短知識解釋。
-        </p>
-        <p className="learn-tip">記住：分數係規則計分，唔係保證賺錢。</p>
       </article>
 
       <p id="short" className="group-header">
-        3. 短線技術指標（App 有用）
+        4. 短線每一柱詳解
       </p>
       <article className="learn-card">
-        <h3>移動平均線 MA（Moving Average）</h3>
+        <h3>趨勢（Trend）</h3>
         <p>
-          把最近 N 日收市價平均，畫成一條「平均成本線」。stockIO 主要用：
+          MA20 / MA50 代表短中線平均成本。價企穩線上偏多；跌破偏淡。若出現「價 &gt; MA20 &gt; MA50」多頭排列，趨勢更乾淨。若同時喺 MA200 之上，代表短線順住大趨勢，假突破機會較低（仍會發生）。
         </p>
-        <ul className="learn-list">
-          <li>
-            <strong>MA20</strong>：近 20 個交易日平均 → 短線趨勢
-          </li>
-          <li>
-            <strong>MA50</strong>：近 50 日 → 中短線趨勢
-          </li>
-        </ul>
+        <h3>動量（Momentum）</h3>
         <p>
-          <strong>點解重要：</strong>股價企喺均線上面，多數人解讀為偏多；跌穿均線，短線轉弱機會大。App 會加分或扣分。
+          RSI 睇過熱／回調；MACD 睇動能方向；近 5/20 日回報睇近期力度；距 52 週高睇係咪市場寵兒（相對強勢股常靠近高位運行）。超買一樣可以繼續升，所以要同趨勢柱一齊睇。
         </p>
-
-        <h3>RSI（相對強弱指數）</h3>
+        <h3>量能（Volume）</h3>
         <p>
-          量度最近升跌「力量」係咪過熱，常見用 14 日。大約解讀：
+          「價升要有量」係經典確認。放量上升較似真需求；放量下跌較似真拋壓。縮量波動可信度較低。
         </p>
-        <ul className="learn-list">
-          <li>
-            <strong>約 45–65</strong>：健康偏多區間（App 會加分）
-          </li>
-          <li>
-            <strong>&gt; 72</strong>：可能超買，小心回調（扣分）
-          </li>
-          <li>
-            <strong>&lt; 30</strong>：超賣，可能反彈但亦可能繼續弱（短線仍偏審慎）
-          </li>
-        </ul>
-
-        <h3>MACD</h3>
+        <h3>結構（Structure）</h3>
         <p>
-          用快慢兩條指數平均線差距，睇動能方向。App 睇：
+          用支撐／阻力距離評估「位置好唔好」。接近支撐可能係較佳觀察位；貼住阻力則冲關失敗風險高。詳見下一節。
         </p>
-        <ul className="learn-list">
-          <li>
-            <strong>MACD 線高於訊號線，柱狀為正</strong> → 偏多動能
-          </li>
-          <li>
-            <strong>柱狀為負</strong> → 偏淡動能
-          </li>
-        </ul>
-
-        <h3>近 5 日 / 20 日回報（動量）</h3>
+        <h3>風險（Risk）</h3>
         <p>
-          簡單講：最近升得多定跌得多。短線升勢強會加分；急跌會扣分。長線頁會多用近月（約 20 日）表現。
+          ATR% 量度日波動。適中波幅較易管理；極高波幅代表倉位風險大。近月回撤太深亦會扣分。
         </p>
-
-        <h3>成交量比率</h3>
-        <p>
-          今日成交量 ÷ 近 20 日平均量。若「放量上升」較可信；「放量下跌」風險較大。App 會因此加減分。
-        </p>
-        <p className="learn-tip">喺邊度睇：短線名單原因、詳情頁短線訊號 chips。</p>
       </article>
 
       <p id="long" className="group-header">
-        4. 長線 / ETF 趨勢
+        5. 長線每一柱詳解
       </p>
       <article className="learn-card">
-        <h3>MA200（200 日線）</h3>
+        <h3>絕對動能 / 趨勢</h3>
         <p>
-          長線投資者好常用嘅「牛熊分界」感覺線。股價長期企喺 200 日線上，多數視為大趨勢向上；跌破則偏弱。長線計分權重好高。
+          MA200 常被視為長線牛熊分界參考。價喺線上＝多數時間傾向持有風險資產；線下則偏防守。MA50 vs MA200 結構類似「金叉/死叉」氣味。
         </p>
-        <h3>相對大市（vs SPY）</h3>
+        <h3>相對動能</h3>
         <p>
-          SPY 大致代表美股大市。若一隻股／ETF 近月表現明顯強過 SPY，叫「相對強勢」；弱過大市則偏弱。長線頁會用呢個比較。
+          同 SPY 比近月表現：強過大市＝資金相對青睞；弱過大市＝就算大市升你都可能落後。
         </p>
-        <h3>ETF 例子</h3>
-        <ul className="learn-list">
-          <li>
-            <strong>SPY / VOO / VTI</strong>：大市
-          </li>
-          <li>
-            <strong>QQQ</strong>：Nasdaq 科技成長
-          </li>
-          <li>
-            <strong>XLK / XLF / XLE…</strong>：板塊輪動
-          </li>
-        </ul>
-        <p className="learn-tip">長線建議觀察期通常以月計（例如 3–12 個月），唔好用日線情緒追高殺低。</p>
+        <h3>質素 / 估值（詳情頁）</h3>
+        <p>
+          ROE、利潤率偏高通常代表賺錢能力較穩；PE 極高要小心「好故事貴價錢」；負債過高喺加息或衰退期較痛。ETF 多數冇完整公司質素數據。
+        </p>
       </article>
 
       <p id="sr" className="group-header">
-        5. 支撐 / 阻力係咩？
+        6. 支撐 / 阻力（詳細）
       </p>
       <article className="learn-card">
-        <h3>用生活比喻</h3>
+        <h3>定義</h3>
+        <ul className="learn-list">
+          <li>
+            <strong>支撐 Support</strong>：價格下跌時較易遇到買盤、停住或反彈嘅區域（好似彈床）。
+          </li>
+          <li>
+            <strong>阻力 Resistance</strong>：價格上升時較易遇到賣盤、受阻回落嘅區域（好似天花）。
+          </li>
+        </ul>
+        <h3>點解會存在？</h3>
         <p>
-          想像股價好似彈波：
+          因為人類同演算法都會喺前高、前低、整數關、均線附近掛單。交易密集區形成「記憶」。跌穿支撐後，舊支撐常變新阻力；升穿阻力後，舊阻力常變新支撐。
         </p>
+        <h3>stockIO 點畫？</h3>
+        <p>結合近期高低（約 40 日）+ 樞軸點（Pivot）估算。圖上：綠虛線＝支撐，紅虛線＝阻力。</p>
+        <h3>點用（實務）</h3>
         <ul className="learn-list">
-          <li>
-            <strong>支撐（Support）</strong>＝地下／彈床。價錢跌到呢一帶，買盤可能出現，價格較易「彈起」。
-          </li>
-          <li>
-            <strong>阻力（Resistance）</strong>＝天花／天花板。價錢升到呢一帶，賣盤可能增多，較易「撞到回落」。
-          </li>
+          <li>偏多訊號 + 接近支撐：較佳觀察／試倉區（仍要管風險）</li>
+          <li>已大升 + 貼阻力：小心冲關失敗</li>
+          <li>止蝕參考：可放喺支撐之下（唔係保證）</li>
         </ul>
-
-        <h3>點解會有支撐／阻力？</h3>
-        <p>
-          因為很多人喺相近價位買入或賣出（前低、前高、整數關口、均線附近）。交易愈多嘅價位，愈容易形成心理關口。
-        </p>
-
-        <h3>stockIO 點計？</h3>
-        <p>我哋結合：</p>
-        <ul className="learn-list">
-          <li>近期高低點（約 40 日內）</li>
-          <li>經典樞軸點（Pivot：用前一日高／低／收計）</li>
-        </ul>
-        <p>
-          圖上會畫：
-        </p>
-        <ul className="learn-list">
-          <li>
-            <strong>綠色虛線</strong>＝支撐
-          </li>
-          <li>
-            <strong>紅色虛線</strong>＝阻力
-          </li>
-        </ul>
-
-        <h3>點樣用（新手版）</h3>
-        <ul className="learn-list">
-          <li>價接近支撐＋其他指標未太差 → 可能係較佳觀察位（唔等於一定買）</li>
-          <li>價貼住阻力＋已經升好多 → 小心冲關失敗回落</li>
-          <li>若跌穿支撐 → 支撐可能變阻力（角色互換）</li>
-          <li>若升穿阻力 → 阻力可能變支撐</li>
-        </ul>
-        <p className="learn-tip">
-          詳情頁「支撐 / 阻力」區塊會顯示實際價錢同距離百分比。
-        </p>
       </article>
 
       <p id="chart" className="group-header">
-        6. 走勢圖點睇
+        7. 走勢圖圖例
       </p>
       <article className="learn-card">
         <ul className="learn-list">
           <li>
-            <strong>面積線（綠/紅）</strong>：股價本身；升用綠、跌用紅
+            <strong>面積線</strong>：股價（升綠／跌紅）
           </li>
           <li>
-            <strong>藍色線 MA20</strong>：短線趨勢。價喺線上較偏多
+            <strong>藍線 MA20</strong>：短線趨勢
           </li>
           <li>
-            <strong>紫色線 MA50</strong>：中線趨勢
+            <strong>紫線 MA50</strong>：中線趨勢
           </li>
           <li>
-            <strong>虛線</strong>：支撐（綠）同阻力（紅）
+            <strong>虛線</strong>：支撐（綠）／阻力（紅）
           </li>
         </ul>
-        <p>
-          範圍大約近 6 個月日線。可以左右拖動睇。若 MA20 上穿 MA50，常被視為短中線轉強訊號之一（仍要配合整體分數）。
-        </p>
+        <p>約 6 個月日線。可拖動。MA20 上穿 MA50 只係眾多確認之一，唔應單獨決策。</p>
       </article>
 
-      <p id="extra" className="group-header">
-        7. 財報 · 新聞 · 觀察期
+      <p id="limits" className="group-header">
+        8. 可信度邊界（一定要讀）
       </p>
       <article className="learn-card">
-        <h3>財報日期</h3>
-        <p>
-          公司公布業績前後，股價波動通常變大。ETF 多數冇「公司財報」。見到下次財報接近，宜更小心倉位同風險。
-        </p>
-        <h3>新聞</h3>
-        <p>
-          來自 Yahoo 相關新聞標題，方便快速了解最近發生咩事。新聞唔會直接改分數，但可以幫你理解突變。
-        </p>
-        <h3>建議觀察期</h3>
         <ul className="learn-list">
-          <li>
-            <strong>短線</strong>：常見約 3–10 個交易日
-          </li>
-          <li>
-            <strong>長線</strong>：常見約 3–12 個月思維
-          </li>
+          <li>數據來自公開行情（Yahoo 非官方），可能延遲或不完整。</li>
+          <li>規則型分數 ≠ 預言；黑天鵝、政策、財報地雷可瞬間打破技術結構。</li>
+          <li>無完整機構級風控、無保證回測優勝。</li>
+          <li>最適合：學習框架 + 縮小觀察名單 + 自己再驗證。</li>
         </ul>
-        <p>呢個係「建議你用咩時間框架去評估結果」，唔係保證喺呢段時間內一定賺。</p>
-      </article>
-
-      <p id="howto" className="group-header">
-        8. 新手建議用法
-      </p>
-      <article className="learn-card">
-        <ol className="learn-list numbered">
-          <li>
-            先去 <Link href="/short">短線</Link> 睇「偏多」名單，唔好一次過買晒。
-          </li>
-          <li>
-            撳入詳情：睇圖、支撐距離、分數原因、財報係咪臨近。
-          </li>
-          <li>
-            想長線配置，去 <Link href="/long">長線</Link> 睇 ETF／大趨勢。
-          </li>
-          <li>
-            感興趣就加 ★ 入 <Link href="/watchlist">關注</Link>，之後追蹤。
-          </li>
-          <li>只用你負擔得起嘅錢；波動可以好大。</li>
-        </ol>
         <p className="learn-tip">今晚贏鋪大,老婆仔女攞去賣!</p>
       </article>
 
       <p className="group-footer">
-        想實戰對照：去 <Link href="/short">短線</Link> 揀一隻股，對住圖同本頁一齊睇。
+        下一步：去 <Link href="/short">短線</Link> 開一隻股詳情，對住「五柱分數」同本頁一齊睇。想長線就去{" "}
+        <Link href="/long">長線</Link>。
       </p>
     </section>
   );

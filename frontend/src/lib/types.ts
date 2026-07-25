@@ -69,6 +69,8 @@ export type StockDetail = {
     signals: string[];
     hold_period: string;
     knowledge: string;
+    pillars?: Record<string, number | null | undefined>;
+    framework?: string;
   };
   long: {
     score: number;
@@ -77,6 +79,8 @@ export type StockDetail = {
     signals: string[];
     hold_period: string;
     knowledge: string;
+    pillars?: Record<string, number | null | undefined>;
+    framework?: string;
   };
   support_resistance: SupportResistance;
   chart?: {
