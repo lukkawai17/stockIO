@@ -360,11 +360,12 @@ textarea {
   background: #8e8e93;
 }
 
-.up {
+/* Text colors for labels — do not override .chg badge (white on green/red). */
+:not(.chg).up {
   color: var(--green);
 }
 
-.down {
+:not(.chg).down {
   color: var(--red);
 }
 
