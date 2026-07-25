@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { APP_RELEASE_NAME, APP_VERSION_LABEL } from "@/lib/version";
 
 export default function HomePage() {
   return (
     <section>
       <div className="hero-card">
-        <p className="hero-kicker">MARKETS</p>
+        <p className="hero-kicker">MARKETS · {APP_VERSION_LABEL}</p>
         <h1>stockIO</h1>
         <p>掃描美股市場，用技術同趨勢畀你清晰建議。加入主畫面。</p>
       </div>
@@ -53,11 +54,17 @@ export default function HomePage() {
         </div>
         <div className="inset-row">
           <dt>詳情包含</dt>
-          <dd>支撐 · 財報 · 新聞</dd>
+          <dd>支撐 · 財報 · 新聞 · 機構 · 限價</dd>
         </div>
         <div className="inset-row">
           <dt>更新</dt>
           <dd>報價約 3 分鐘</dd>
+        </div>
+        <div className="inset-row">
+          <dt>版本</dt>
+          <dd>
+            {APP_VERSION_LABEL} · {APP_RELEASE_NAME}
+          </dd>
         </div>
       </div>
       <p className="group-footer">今晚贏鋪大,老婆仔女攞去賣!</p>

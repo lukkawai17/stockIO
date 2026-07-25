@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { APP_VERSION_LABEL } from "@/lib/version";
 
 export default function LearnPage() {
   return (
     <section>
       <h1 className="large-title">知識</h1>
       <p className="page-sub">
-        目標唔係「保證賺錢」——冇系統做得到。目標係提高長期期望值：只喺確認齊備時出手、嚴控單筆風險、避開明顯弱勢。
+        {APP_VERSION_LABEL} · 目標唔係「保證賺錢」——冇系統做得到。目標係提高長期期望值：只喺確認齊備時出手、嚴控單筆風險、避開明顯弱勢。
       </p>
 
       <p className="group-header">目錄</p>
