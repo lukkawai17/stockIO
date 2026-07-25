@@ -1,0 +1,9 @@
+{
+  "name": "stockio",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:frontend": "cd frontend && npm run dev",
+    "scan": "cd backend && .venv/bin/python -c \"from app.services.scanner import run_scan; run_scan('short', True); run_scan('long', True)\""
+  }
+}

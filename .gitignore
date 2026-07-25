@@ -1,0 +1,19 @@
+# dependencies / envs
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.DS_Store
+
+# build / cache
+frontend/.next/
+frontend/out/
+backend/data/*.json
+!backend/data/seed_scan_short.json
+!backend/data/seed_scan_long.json
+*.egg-info/
+dist/
+.cache/
