@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { computeSnapshot, scoreLong, scoreShort } from "@/lib/analysis";
+import { buildChartPayload } from "@/lib/chartData";
 import { findInScans } from "@/lib/scanStore";
 import { yahooFinance } from "@/lib/yahoo";
 
@@ -27,6 +28,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       chart.quotes
         ?.filter((q) => q.close != null && q.high != null && q.low != null)
         .map((q) => ({
+          date: q.date ?? null,
           high: Number(q.high),
           low: Number(q.low),
           close: Number(q.close),
@@ -54,7 +56,6 @@ export async function GET(_req: Request, ctx: Ctx) {
     const short = scoreShort(snap);
     const long = scoreLong(snap, rel);
 
-    // Prefer richer reason from latest market scan if present
     if (cached.short) {
       short.score = cached.short.score;
       short.label = cached.short.label;
@@ -88,6 +89,12 @@ export async function GET(_req: Request, ctx: Ctx) {
         };
       }) || [];
 
+    const chartPayload = buildChartPayload(
+      bars,
+      snap.support_resistance.support,
+      snap.support_resistance.resistance
+    );
+
     return NextResponse.json({
       ticker,
       price: snap.price,
@@ -96,6 +103,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       short,
       long,
       support_resistance: snap.support_resistance,
+      chart: chartPayload,
       earnings: {
         next_earnings: earningsDate
           ? {

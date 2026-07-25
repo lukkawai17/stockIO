@@ -6,6 +6,7 @@ import Link from "next/link";
 import { fetchStock } from "@/lib/api";
 import { loadWatchlist, toggleWatch } from "@/lib/watchlist";
 import { LabelBadge } from "@/components/LabelBadge";
+import { StockChart } from "@/components/StockChart";
 import type { StockDetail } from "@/lib/types";
 
 export default function StockDetailPage() {
@@ -89,6 +90,13 @@ export default function StockDetailPage() {
           </span>
         </div>
       </div>
+
+      {data.chart && data.chart.price.length > 0 && (
+        <>
+          <p className="group-header">走勢圖</p>
+          <StockChart data={data.chart} up={up || (!up && !down)} />
+        </>
+      )}
 
       <p className="group-header">短線建議</p>
       <div className="inset-list">

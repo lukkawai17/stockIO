@@ -79,6 +79,14 @@ export type StockDetail = {
     knowledge: string;
   };
   support_resistance: SupportResistance;
+  chart?: {
+    price: { time: string; value: number }[];
+    ma20: { time: string; value: number }[];
+    ma50: { time: string; value: number }[];
+    support: number;
+    resistance: number;
+    range: string;
+  } | null;
   earnings: {
     next_earnings: { date: string; eps_estimate: number | null; reported_eps: number | null } | null;
     recent: { date: string; eps_estimate: number | null; reported_eps: number | null }[];
