@@ -6,7 +6,7 @@ export default function HomePage() {
       <div className="hero-card">
         <p className="hero-kicker">MARKETS</p>
         <h1>stockIO</h1>
-        <p>掃描美股市場，用技術同趨勢畀你清晰建議。加入主畫面，手感接近原生 App。</p>
+        <p>掃描美股市場，用技術同趨勢畀你清晰建議。加入主畫面。</p>
       </div>
 
       <p className="group-header">快速開始</p>
@@ -60,7 +60,7 @@ export default function HomePage() {
           <dd>報價約 3 分鐘</dd>
         </div>
       </div>
-      <p className="group-footer">只供學習同朋友參考，唔係投資建議。數據來自 Yahoo Finance。</p>
+      <p className="group-footer">今晚贏鋪大,老婆仔女攞去賣!</p>
     </section>
   );
 }

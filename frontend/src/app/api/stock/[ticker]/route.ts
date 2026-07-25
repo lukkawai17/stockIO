@@ -117,7 +117,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       news,
       hold_period_short: short.hold_period,
       hold_period_long: long.hold_period,
-      disclaimer: "只供學習同參考，唔係投資建議。",
+      disclaimer: "今晚贏鋪大,老婆仔女攞去賣!",
     });
   } catch (e) {
     return NextResponse.json(

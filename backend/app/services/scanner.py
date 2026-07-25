@@ -94,7 +94,7 @@ def run_scan(mode: Literal["short", "long"], force: bool = False) -> dict[str, A
             "hold": neutrals,
             "all": rows,
             "spy": snaps.get("SPY"),
-            "disclaimer": "只供學習同參考，唔係投資建議。美股有風險，過往表現唔代表將來。",
+            "disclaimer": "今晚贏鋪大,老婆仔女攞去賣!",
         }
     )
     cache.write_json(path, payload)
@@ -166,7 +166,7 @@ def get_stock_detail(ticker: str) -> dict[str, Any]:
         "news": news,
         "hold_period_short": short["hold_period"],
         "hold_period_long": long["hold_period"],
-        "disclaimer": "只供學習同參考，唔係投資建議。",
+        "disclaimer": "今晚贏鋪大,老婆仔女攞去賣!",
     }
 
 
