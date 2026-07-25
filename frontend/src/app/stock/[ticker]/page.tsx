@@ -185,7 +185,10 @@ export default function StockDetailPage() {
           <dd>{sr.distance_to_resistance_pct.toFixed(2)}%</dd>
         </div>
       </div>
-      <p className="group-footer">接近支撐或有反彈空間；接近阻力要小心冲關失敗。</p>
+      <p className="group-footer">
+        接近支撐或有反彈空間；接近阻力要小心冲關失敗。想知詳情去{" "}
+        <Link href="/learn#sr">知識 · 支撐/阻力</Link>。
+      </p>
 
       <p className="group-header">財報</p>
       <div className="inset-list">

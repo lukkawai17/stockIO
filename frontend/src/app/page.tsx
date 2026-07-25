@@ -32,13 +32,13 @@ export default function HomePage() {
             <span>你自己嘅清單</span>
           </div>
         </Link>
-        <div className="quick-link" style={{ animationDelay: "0.2s" }}>
-          <span className="quick-icon gray">＋</span>
+        <Link href="/learn" className="quick-link" style={{ animationDelay: "0.2s" }}>
+          <span className="quick-icon gray">？</span>
           <div>
-            <strong>加主畫面</strong>
-            <span>Safari → 分享 → 加入</span>
+            <strong>知識</strong>
+            <span>新手教學 · 指標解釋</span>
           </div>
-        </div>
+        </Link>
       </div>
 
       <p className="group-header">點樣用</p>

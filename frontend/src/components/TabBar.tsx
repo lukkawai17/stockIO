@@ -39,6 +39,21 @@ const tabs = [
     ),
   },
   {
+    href: "/learn",
+    label: "知識",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M5 5.5A2.5 2.5 0 0 1 7.5 3H20v14.5H7.5A2.5 2.5 0 0 0 5 20V5.5Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+        <path d="M5 19.5h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     href: "/watchlist",
     label: "關注",
     icon: (

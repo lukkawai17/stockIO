@@ -248,6 +248,7 @@ textarea {
   font-weight: 400;
   text-transform: none;
   letter-spacing: -0.08px;
+  scroll-margin-top: 16px;
 }
 
 .group-footer {
@@ -689,7 +690,7 @@ textarea {
   margin: 0 auto;
   height: var(--tab-h);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .tab-item {
@@ -794,6 +795,74 @@ textarea {
   margin: 2px 6px 4px;
   color: var(--tertiary);
   font-size: 11px;
+}
+
+.learn-card {
+  background: var(--bg-grouped);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+  animation: fade-up 0.5s var(--ease) both;
+}
+
+.learn-card h3 {
+  margin: 16px 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.learn-card h3:first-child {
+  margin-top: 0;
+}
+
+.learn-card p {
+  margin: 0 0 10px;
+  color: var(--secondary);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.learn-list {
+  margin: 0 0 12px;
+  padding-left: 1.15rem;
+  color: var(--secondary);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.learn-list.numbered {
+  padding-left: 1.25rem;
+}
+
+.learn-list li {
+  margin-bottom: 6px;
+}
+
+.learn-list strong,
+.learn-card p strong {
+  color: var(--label);
+  font-weight: 600;
+}
+
+.learn-tip {
+  margin: 12px 0 0 !important;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(10, 132, 255, 0.14);
+  color: #6eb5ff !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+}
+
+.learn-toc .news-row strong {
+  font-size: 15px;
+}
+
+.learn-card a {
+  color: var(--blue);
 }
 
 @keyframes fade-up {
