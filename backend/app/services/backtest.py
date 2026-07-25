@@ -5,19 +5,18 @@ Strategy backtest (event study) for stockIO rules.
 
 Measures what happens AFTER a 「買」 signal — not a per-ticker beauty contest.
 Two entry styles:
-  - chase: enter at signal close (or next open ≈ close)
-  - limit: enter only if price pulls into suggested buy zone within 5 sessions
+  - chase: signal at bar close → enter next open (no same-bar lookahead)
+  - limit: enter only if price pulls into suggested buy zone within 5 sessions after signal
 """
 
 import logging
 import math
-from datetime import datetime, timezone
 from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
 
-from app.config import CACHE_BACKTEST, HISTORY_INTERVAL
+from app.config import CACHE_BACKTEST
 from app.services import cache
 from app.services.indicators import compute_snapshot
 from app.services.market_data import download_history
@@ -28,11 +27,8 @@ logger = logging.getLogger(__name__)
 
 HORIZONS = (5, 10, 20)
 MIN_BARS = 80
-# Sample every N sessions to keep CI runtime reasonable
 STEP = 5
-# Lookahead window to fill a limit order after signal
 LIMIT_WAIT = 5
-# Universe size for backtest (liquid equities + SPY)
 MAX_TICKERS = 40
 
 
@@ -71,14 +67,6 @@ def _summarize(returns: list[float]) -> dict[str, Any]:
 
 def _slice_df(df: pd.DataFrame, end_idx: int) -> pd.DataFrame:
     return df.iloc[: end_idx + 1]
-
-
-def _forward_close(closes: np.ndarray, i: int, horizon: int) -> float | None:
-    j = i + horizon
-    if j >= len(closes):
-        return None
-    v = float(closes[j])
-    return None if math.isnan(v) else v
 
 
 def _backtest_mode(
@@ -130,7 +118,7 @@ def _backtest_mode(
         index = df.index
 
         start = max(MIN_BARS, 200 if mode == "long" else MIN_BARS)
-        end = len(df) - max(HORIZONS) - 1
+        end = len(df) - max(HORIZONS) - 2
 
         for i in range(start, end, STEP):
             snap = compute_snapshot(_slice_df(df, i))
@@ -158,28 +146,28 @@ def _backtest_mode(
                 continue
 
             signal_count += 1
-            entry_chase = float(closes[i])
+            entry_i = i + 1
+            entry_chase = float(opens[entry_i])
             levels = scored.get("levels") or suggest_levels(snap, "買", mode)
             buy_high = levels.get("buy_high")
-            buy_px = levels.get("buy")
             stop_px = levels.get("stop")
             sell_px = levels.get("sell")
 
-            si = spy_loc(index[i])
+            si = spy_loc(index[entry_i])
+            spy_arr = spy_closes.to_numpy() if spy_closes is not None else None
             for h in HORIZONS:
-                exit_px = _forward_close(closes, i, h)
-                r = _safe_ret(entry_chase, exit_px) if exit_px is not None else None
+                exit_i = entry_i + h
+                if exit_i >= len(df):
+                    continue
+                r = _safe_ret(entry_chase, float(closes[exit_i]))
                 if r is not None:
                     chase_by_h[h].append(r)
-
-                if spy_closes is not None and si is not None:
-                    spy_arr = spy_closes.to_numpy()
-                    sx = _forward_close(spy_arr, si, h)
-                    sr = _safe_ret(float(spy_arr[si]), sx) if sx is not None else None
+                if spy_arr is not None and si is not None and si + h < len(spy_arr):
+                    sr = _safe_ret(float(spy_arr[si]), float(spy_arr[si + h]))
                     if sr is not None:
                         spy_by_h[h].append(sr)
 
-            if buy_high is None or buy_px is None:
+            if buy_high is None:
                 continue
             filled_i = None
             fill_price = None
@@ -187,9 +175,14 @@ def _backtest_mode(
                 j = i + k
                 if j >= len(df):
                     break
-                if float(lows[j]) <= float(buy_high):
-                    fill_price = min(float(opens[j]), float(buy_high))
-                    fill_price = max(fill_price, float(buy_px) * 0.995)
+                o = float(opens[j])
+                lo = float(lows[j])
+                if o <= float(buy_high):
+                    fill_price = o
+                    filled_i = j
+                    break
+                if lo <= float(buy_high):
+                    fill_price = float(buy_high)
                     filled_i = j
                     break
             if filled_i is None or fill_price is None:
@@ -197,17 +190,24 @@ def _backtest_mode(
             limit_filled += 1
 
             for h in HORIZONS:
+                if filled_i + h >= len(df):
+                    continue
                 exit_px = None
-                last_j = min(filled_i + h, len(df) - 1)
-                for j in range(filled_i + 1, last_j + 1):
+                for j in range(filled_i, filled_i + h + 1):
                     if stop_px is not None and float(lows[j]) <= float(stop_px):
-                        exit_px = float(stop_px)
+                        if j == filled_i and float(opens[j]) <= float(stop_px):
+                            exit_px = float(opens[j])
+                        else:
+                            exit_px = float(stop_px)
                         break
                     if sell_px is not None and float(highs[j]) >= float(sell_px):
-                        exit_px = float(sell_px)
+                        if j == filled_i and float(opens[j]) >= float(sell_px):
+                            exit_px = float(opens[j])
+                        else:
+                            exit_px = float(sell_px)
                         break
                 if exit_px is None:
-                    exit_px = float(closes[last_j])
+                    exit_px = float(closes[filled_i + h])
                 r = _safe_ret(fill_price, exit_px)
                 if r is not None:
                     limit_by_h[h].append(r)
@@ -244,7 +244,6 @@ def _backtest_mode(
 
 def run_backtest(force: bool = False) -> dict[str, Any]:
     existing = cache.read_json(CACHE_BACKTEST)
-    # Refresh at most weekly unless forced
     if not force and existing and cache.is_fresh(existing, 6 * 24 * 3600):
         return existing  # type: ignore
 
@@ -252,7 +251,6 @@ def run_backtest(force: bool = False) -> dict[str, Any]:
     tickers = list(dict.fromkeys(["SPY", *equities, *etf_tickers()[:8]]))
     logger.info("Backtest downloading %d tickers", len(tickers))
 
-    # Prefer ~2y for more signals
     frames = download_history(tickers, period="2y")
     spy_df = frames.get("SPY")
 
@@ -268,9 +266,9 @@ def run_backtest(force: bool = False) -> dict[str, Any]:
             "universe_cap": MAX_TICKERS,
             "notes": [
                 "回測驗證策略規則，唔係逐隻股排行。",
-                "chase＝訊號日收市價入場，持有至 N 日。",
-                "limit＝訊號後最多 5 日內跌入買入區間先入場，觸止蝕／目標或持有至 N 日。",
-                "訊號可重疊；費用／滑價未計；過去唔代表未來。",
+                "chase＝訊號日收市確認後，下一交易日開市入場，持有至 N 日（避免用當日收市先知入場）。",
+                "limit＝訊號後最多 5 日內跌入買入區間先入場；缺口低開直接用開市價成交。",
+                "限價路徑：同一日先計止蝕再計目標（偏保守）。訊號可重疊；費用／滑價未計；過去唔代表未來。",
             ],
             "short": short,
             "long": long,

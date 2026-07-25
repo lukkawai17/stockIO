@@ -38,10 +38,14 @@ export type StockRow = {
   buy_price?: number | null;
   sell_price?: number | null;
   stop_price?: number | null;
+  atr_pct?: number | null;
+  pillars?: Record<string, number | null | undefined>;
+  framework?: string;
   rsi?: number;
   macd_hist?: number;
   ret_5d?: number;
   ret_20d?: number;
+  ret_63d?: number;
   volume_ratio?: number;
   ma20?: number;
   ma50?: number;

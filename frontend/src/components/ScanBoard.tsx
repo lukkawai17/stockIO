@@ -184,6 +184,9 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
             )}
           </div>
           {data.disclaimer && <p className="group-footer">{data.disclaimer}</p>}
+          <p className="group-footer">
+            報價約 3 分鐘更新；分數／限價基於最近一次全市場掃描收市數據。點開詳情可睇即時重計。
+          </p>
         </>
       )}
     </section>

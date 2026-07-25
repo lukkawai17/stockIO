@@ -11,8 +11,10 @@ type Row = {
   ticker: string;
   price: number;
   change_pct: number;
-  label?: Label;
-  score?: number;
+  shortLabel?: Label;
+  shortScore?: number;
+  longLabel?: Label;
+  longScore?: number;
   reason?: string;
 };
 
@@ -47,8 +49,10 @@ export default function WatchlistPage() {
                 ticker: t,
                 price: quotes.quotes[t]?.price ?? d.price,
                 change_pct: quotes.quotes[t]?.change_pct ?? d.change_pct,
-                label: d.short.label,
-                score: d.short.score,
+                shortLabel: d.short.label,
+                shortScore: d.short.score,
+                longLabel: d.long.label,
+                longScore: d.long.score,
                 reason: d.short.reason,
               } as Row;
             } catch {
@@ -81,7 +85,7 @@ export default function WatchlistPage() {
   return (
     <section>
       <h1 className="large-title">關注</h1>
-      <p className="page-sub">清單保存在呢部裝置。換機可匯出再匯入。</p>
+      <p className="page-sub">清單保存在呢部裝置。顯示短線＋長線建議。</p>
 
       <div className="toolbar-row">
         <button
@@ -157,8 +161,20 @@ export default function WatchlistPage() {
                   <Link href={`/stock/${r.ticker}`} className="stock-cell-left">
                     <span className="stock-symbol">{r.ticker}</span>
                     <div className="row-meta">
-                      {r.label && <LabelBadge label={r.label} />}
-                      {r.score != null && <span className="score-chip">{r.score.toFixed(0)}</span>}
+                      {r.shortLabel && (
+                        <>
+                          <span className="meta-caption">短</span>
+                          <LabelBadge label={r.shortLabel} />
+                          {r.shortScore != null && <span className="score-chip">{r.shortScore.toFixed(0)}</span>}
+                        </>
+                      )}
+                      {r.longLabel && (
+                        <>
+                          <span className="meta-caption">長</span>
+                          <LabelBadge label={r.longLabel} />
+                          {r.longScore != null && <span className="score-chip">{r.longScore.toFixed(0)}</span>}
+                        </>
+                      )}
                       <button
                         type="button"
                         className="star-btn on"

@@ -450,6 +450,9 @@ export default function StockDetailPage() {
       </div>
 
       {data.disclaimer && <p className="group-footer">{data.disclaimer}</p>}
+      <p className="group-footer">
+        註：詳情頁即時重計（含質素／機構）；列表分數嚟自定時掃描（偏技術）。兩者可能略有差別。
+      </p>
     </section>
   );
 }

@@ -294,7 +294,7 @@ export default function LearnPage() {
         </p>
         <ul className="learn-list">
           <li>
-            <strong>追價</strong>：訊號日收市入場，持有 5／10／20 日
+            <strong>追價</strong>：訊號日收市確認後，下一交易日開市入場，持有 5／10／20 日
           </li>
           <li>
             <strong>限價</strong>：訊號後最多 5 日跌入買入區間先入場；觸止蝕／目標或到期出場

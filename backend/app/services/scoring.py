@@ -61,7 +61,8 @@ def suggest_levels(snap: dict, label: str, horizon: str = "short") -> dict:
     ma_pull = float(snap.get("ma20") if horizon == "short" else snap.get("ma50") or p)
     deep_ma = snap.get("ma50") if horizon == "short" else snap.get("ma200")
     deep_ma = float(deep_ma) if deep_ma is not None else ma_pull
-    dist_res = float(sr.get("distance_to_resistance_pct") or 99)
+    _dr = sr.get("distance_to_resistance_pct")
+    dist_res = float(_dr) if _dr is not None else 99.0
 
     def r(n: float) -> float:
         return round(n, 2)

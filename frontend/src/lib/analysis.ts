@@ -100,17 +100,25 @@ function emaSeries(values: number[], span: number): number[] {
 }
 
 function rsi(closes: number[], period = 14): number {
+  // Wilder RSI — match backend indicators.rsi (EWM alpha=1/period)
   if (closes.length <= period) return 50;
-  let gains = 0;
-  let losses = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
     const d = closes[i] - closes[i - 1];
-    if (d >= 0) gains += d;
-    else losses -= d;
+    if (d >= 0) avgGain += d;
+    else avgLoss -= d;
   }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  if (avgLoss === 0) return 100;
+  avgGain /= period;
+  avgLoss /= period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    const gain = d > 0 ? d : 0;
+    const loss = d < 0 ? -d : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+  if (avgLoss === 0) return avgGain === 0 ? 50 : 100;
   return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
@@ -144,6 +152,7 @@ function round(n: number, d = 2) {
 }
 
 function clamp(n: number, lo = 0, hi = 100) {
+  if (!Number.isFinite(n)) return (lo + hi) / 2;
   return Math.max(lo, Math.min(hi, n));
 }
 
@@ -546,6 +555,11 @@ export function scoreShort(snap: Snapshot): ScoreResult {
     momentum -= 10;
     reasons.push(`近5日${snap.ret_5d}%`);
   }
+  if (snap.ret_20d > 5) {
+    momentum += 6;
+  } else if (snap.ret_20d < -8) {
+    momentum -= 8;
+  }
   if (snap.dist_52w_high_pct != null) {
     if (snap.dist_52w_high_pct <= 8) {
       momentum += 6;
@@ -579,6 +593,8 @@ export function scoreShort(snap: Snapshot): ScoreResult {
   if (ds <= 2) {
     structure += 14;
     reasons.push("接近支撐（結構較佳觀察位）");
+  } else if (ds >= 12) {
+    structure -= 4;
   }
   if (dr <= 1.5) {
     structure -= 14;
@@ -597,6 +613,9 @@ export function scoreShort(snap: Snapshot): ScoreResult {
     } else if (snap.atr_pct > 6) {
       risk -= 16;
       reasons.push(`波幅偏高(ATR ${snap.atr_pct}%)`);
+    } else if (snap.atr_pct < 0.8) {
+      risk += 4;
+      reasons.push("波幅偏低");
     }
   }
   if (snap.drawdown_20d_pct <= -12) {
