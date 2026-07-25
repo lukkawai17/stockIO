@@ -1,4 +1,4 @@
-import type { Quote, ScanResponse, StockDetail } from "./types";
+import type { BacktestResponse, Quote, ScanResponse, StockDetail } from "./types";
 
 async function getJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, cache: "no-store" });
@@ -39,4 +39,8 @@ export function fetchStock(ticker: string) {
 
 export function fetchMarketStatus() {
   return getJSON<{ is_open: boolean; session: string; note?: string }>("/api/market/status");
+}
+
+export function fetchBacktest() {
+  return getJSON<BacktestResponse>("/api/backtest");
 }

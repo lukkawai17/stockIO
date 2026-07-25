@@ -1,5 +1,9 @@
 # stockIO releases
 
+## Unreleased
+
+- Strategy backtest page (`/backtest`): event-study of 「買」 signals (chase vs limit vs SPY), weekly GitHub Action.
+
 ## v1.0.0 — Baseline (2026-07-25)
 
 First named release of the free US-stock PWA.

@@ -47,6 +47,10 @@ export default function LearnPage() {
           <strong>8. 限制</strong>
           <p className="meta">可信度邊界</p>
         </a>
+        <a className="news-row" href="#backtest">
+          <strong>9. 策略回測</strong>
+          <p className="meta">驗證規則，唔係揀股神器</p>
+        </a>
       </div>
 
       <p id="truth" className="group-header">
@@ -274,15 +278,39 @@ export default function LearnPage() {
           <li>數據來自公開行情（Yahoo 非官方），可能延遲或不完整。</li>
           <li>13F 滯後；指數基金增減可能係被動再平衡。</li>
           <li>規則型分數 ≠ 預言；政策、財報、流動性危機可瞬間打破結構。</li>
-          <li>無完整樣本外回測保證未來勝出。</li>
+          <li>回測係策略健康檢查，過去 ≠ 未來。</li>
           <li>最適合：學習框架 + 縮小名單 + 自己用紀律執行。</li>
         </ul>
         <p className="learn-tip">今晚贏鋪大,老婆仔女攞去賣!</p>
       </article>
 
+      <p id="backtest" className="group-header">
+        9. 策略回測
+      </p>
+      <article className="learn-card">
+        <p>
+          回測頁驗證「當規則標『買』之後，之後幾日平均點樣」——用嚟檢查框架健康度，
+          <strong>唔用來</strong>因為某隻股歷史靚就今日必買。
+        </p>
+        <ul className="learn-list">
+          <li>
+            <strong>追價</strong>：訊號日收市入場，持有 5／10／20 日
+          </li>
+          <li>
+            <strong>限價</strong>：訊號後最多 5 日跌入買入區間先入場；觸止蝕／目標或到期出場
+          </li>
+          <li>
+            <strong>vs SPY</strong>：同期大市作基準
+          </li>
+        </ul>
+        <p>
+          限制：訊號可重疊、未計費用／滑價、過去 ≠ 未來。詳情見 <Link href="/backtest">回測頁</Link>。
+        </p>
+      </article>
+
       <p className="group-footer">
         下一步：開一隻股詳情，對住五柱／機構表同本頁檢查表一齊用。 <Link href="/short">短線</Link> ·{" "}
-        <Link href="/long">長線</Link>
+        <Link href="/long">長線</Link> · <Link href="/backtest">回測</Link>。
       </p>
     </section>
   );

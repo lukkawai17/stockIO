@@ -66,6 +66,12 @@ export default function HomePage() {
             {APP_VERSION_LABEL} · {APP_RELEASE_NAME}
           </dd>
         </div>
+        <div className="inset-row">
+          <dt>策略回測</dt>
+          <dd>
+            <Link href="/backtest">睇成績</Link>
+          </dd>
+        </div>
       </div>
       <p className="group-footer">今晚贏鋪大,老婆仔女攞去賣!</p>
     </section>

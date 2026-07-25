@@ -142,3 +142,48 @@ export type StockDetail = {
   } | null;
   disclaimer?: string;
 };
+
+export type BacktestStats = {
+  n: number;
+  avg_return_pct: number | null;
+  median_return_pct: number | null;
+  win_rate_pct: number | null;
+  avg_win_pct: number | null;
+  avg_loss_pct: number | null;
+  worst_trade_pct: number | null;
+  best_trade_pct: number | null;
+};
+
+export type BacktestHorizon = {
+  hold_days: number;
+  chase: BacktestStats;
+  limit: BacktestStats;
+  spy: BacktestStats;
+  chase_minus_spy_pct: number | null;
+};
+
+export type BacktestModeBlock = {
+  mode: string;
+  tickers_used: number;
+  signals: number;
+  limit_fills: number;
+  limit_fill_rate_pct: number | null;
+  step_days: number;
+  limit_wait_days: number;
+  horizons: BacktestHorizon[];
+};
+
+export type BacktestResponse = {
+  status?: string;
+  message?: string;
+  framework?: string;
+  method?: string;
+  period?: string;
+  universe_cap?: number;
+  notes?: string[];
+  short: BacktestModeBlock | null;
+  long: BacktestModeBlock | null;
+  updated_at?: number;
+  updated_at_iso?: string;
+  disclaimer?: string;
+};

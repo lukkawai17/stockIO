@@ -1,0 +1,242 @@
+{
+  "status": "ok",
+  "framework": "multi_pillar_v3",
+  "method": "event_study_buy_signals",
+  "period": "2y",
+  "universe_cap": 40,
+  "notes": [
+    "回測驗證策略規則，唔係逐隻股排行。",
+    "chase＝訊號日收市價入場，持有至 N 日。",
+    "limit＝訊號後最多 5 日內跌入買入區間先入場，觸止蝕／目標或持有至 N 日。",
+    "訊號可重疊；費用／滑價未計；過去唔代表未來。"
+  ],
+  "short": {
+    "mode": "short",
+    "tickers_used": 47,
+    "signals": 504,
+    "limit_fills": 112,
+    "limit_fill_rate_pct": 22.2,
+    "step_days": 5,
+    "limit_wait_days": 5,
+    "horizons": [
+      {
+        "hold_days": 5,
+        "chase": {
+          "n": 504,
+          "avg_return_pct": 0.31,
+          "median_return_pct": 0.2,
+          "win_rate_pct": 53.4,
+          "avg_win_pct": 3.44,
+          "avg_loss_pct": -3.26,
+          "worst_trade_pct": -22.35,
+          "best_trade_pct": 39.71
+        },
+        "limit": {
+          "n": 112,
+          "avg_return_pct": -0.11,
+          "median_return_pct": 0.19,
+          "win_rate_pct": 50.9,
+          "avg_win_pct": 2.98,
+          "avg_loss_pct": -3.3,
+          "worst_trade_pct": -8.86,
+          "best_trade_pct": 10.59
+        },
+        "spy": {
+          "n": 504,
+          "avg_return_pct": 0.22,
+          "median_return_pct": 0.29,
+          "win_rate_pct": 56.0,
+          "avg_win_pct": 1.3,
+          "avg_loss_pct": -1.17,
+          "worst_trade_pct": -9.83,
+          "best_trade_pct": 5.35
+        },
+        "chase_minus_spy_pct": 0.09
+      },
+      {
+        "hold_days": 10,
+        "chase": {
+          "n": 504,
+          "avg_return_pct": 0.62,
+          "median_return_pct": 0.37,
+          "win_rate_pct": 53.0,
+          "avg_win_pct": 5.0,
+          "avg_loss_pct": -4.31,
+          "worst_trade_pct": -22.16,
+          "best_trade_pct": 30.2
+        },
+        "limit": {
+          "n": 112,
+          "avg_return_pct": -0.01,
+          "median_return_pct": 0.42,
+          "win_rate_pct": 51.8,
+          "avg_win_pct": 4.09,
+          "avg_loss_pct": -4.42,
+          "worst_trade_pct": -10.48,
+          "best_trade_pct": 11.11
+        },
+        "spy": {
+          "n": 504,
+          "avg_return_pct": 0.57,
+          "median_return_pct": 0.52,
+          "win_rate_pct": 65.5,
+          "avg_win_pct": 1.75,
+          "avg_loss_pct": -1.67,
+          "worst_trade_pct": -12.14,
+          "best_trade_pct": 6.81
+        },
+        "chase_minus_spy_pct": 0.05
+      },
+      {
+        "hold_days": 20,
+        "chase": {
+          "n": 504,
+          "avg_return_pct": 1.38,
+          "median_return_pct": 0.24,
+          "win_rate_pct": 51.6,
+          "avg_win_pct": 8.15,
+          "avg_loss_pct": -5.82,
+          "worst_trade_pct": -24.67,
+          "best_trade_pct": 68.63
+        },
+        "limit": {
+          "n": 112,
+          "avg_return_pct": 0.0,
+          "median_return_pct": -0.45,
+          "win_rate_pct": 48.2,
+          "avg_win_pct": 5.4,
+          "avg_loss_pct": -5.03,
+          "worst_trade_pct": -12.61,
+          "best_trade_pct": 15.9
+        },
+        "spy": {
+          "n": 504,
+          "avg_return_pct": 0.76,
+          "median_return_pct": 0.77,
+          "win_rate_pct": 61.1,
+          "avg_win_pct": 2.88,
+          "avg_loss_pct": -2.56,
+          "worst_trade_pct": -9.75,
+          "best_trade_pct": 12.44
+        },
+        "chase_minus_spy_pct": 0.62
+      }
+    ]
+  },
+  "long": {
+    "mode": "long",
+    "tickers_used": 47,
+    "signals": 630,
+    "limit_fills": 76,
+    "limit_fill_rate_pct": 12.1,
+    "step_days": 5,
+    "limit_wait_days": 5,
+    "horizons": [
+      {
+        "hold_days": 5,
+        "chase": {
+          "n": 630,
+          "avg_return_pct": 1.01,
+          "median_return_pct": 0.42,
+          "win_rate_pct": 54.8,
+          "avg_win_pct": 4.57,
+          "avg_loss_pct": -3.29,
+          "worst_trade_pct": -23.24,
+          "best_trade_pct": 27.56
+        },
+        "limit": {
+          "n": 76,
+          "avg_return_pct": 1.03,
+          "median_return_pct": 0.64,
+          "win_rate_pct": 57.9,
+          "avg_win_pct": 4.17,
+          "avg_loss_pct": -3.29,
+          "worst_trade_pct": -9.44,
+          "best_trade_pct": 20.47
+        },
+        "spy": {
+          "n": 630,
+          "avg_return_pct": 0.37,
+          "median_return_pct": 0.4,
+          "win_rate_pct": 59.0,
+          "avg_win_pct": 1.34,
+          "avg_loss_pct": -1.02,
+          "worst_trade_pct": -3.82,
+          "best_trade_pct": 5.35
+        },
+        "chase_minus_spy_pct": 0.64
+      },
+      {
+        "hold_days": 10,
+        "chase": {
+          "n": 630,
+          "avg_return_pct": 1.86,
+          "median_return_pct": 0.72,
+          "win_rate_pct": 55.9,
+          "avg_win_pct": 7.02,
+          "avg_loss_pct": -4.67,
+          "worst_trade_pct": -27.13,
+          "best_trade_pct": 63.22
+        },
+        "limit": {
+          "n": 76,
+          "avg_return_pct": 2.12,
+          "median_return_pct": 0.76,
+          "win_rate_pct": 56.6,
+          "avg_win_pct": 6.69,
+          "avg_loss_pct": -3.84,
+          "worst_trade_pct": -11.23,
+          "best_trade_pct": 25.79
+        },
+        "spy": {
+          "n": 630,
+          "avg_return_pct": 0.65,
+          "median_return_pct": 0.68,
+          "win_rate_pct": 62.5,
+          "avg_win_pct": 1.87,
+          "avg_loss_pct": -1.39,
+          "worst_trade_pct": -5.28,
+          "best_trade_pct": 9.89
+        },
+        "chase_minus_spy_pct": 1.21
+      },
+      {
+        "hold_days": 20,
+        "chase": {
+          "n": 630,
+          "avg_return_pct": 4.01,
+          "median_return_pct": 1.47,
+          "win_rate_pct": 57.6,
+          "avg_win_pct": 11.42,
+          "avg_loss_pct": -6.08,
+          "worst_trade_pct": -32.16,
+          "best_trade_pct": 104.4
+        },
+        "limit": {
+          "n": 76,
+          "avg_return_pct": 3.03,
+          "median_return_pct": 1.21,
+          "win_rate_pct": 57.9,
+          "avg_win_pct": 8.94,
+          "avg_loss_pct": -5.09,
+          "worst_trade_pct": -15.44,
+          "best_trade_pct": 38.58
+        },
+        "spy": {
+          "n": 630,
+          "avg_return_pct": 1.27,
+          "median_return_pct": 1.25,
+          "win_rate_pct": 67.3,
+          "avg_win_pct": 2.81,
+          "avg_loss_pct": -1.91,
+          "worst_trade_pct": -7.68,
+          "best_trade_pct": 12.61
+        },
+        "chase_minus_spy_pct": 2.74
+      }
+    ]
+  },
+  "disclaimer": "今晚贏鋪大,老婆仔女攞去賣!",
+  "updated_at": 1784969223.2187,
+  "updated_at_iso": "2026-07-25T08:47:03Z"
+}

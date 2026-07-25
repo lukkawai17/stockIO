@@ -11,6 +11,7 @@ _OUT.mkdir(parents=True, exist_ok=True)
 
 CACHE_SHORT = _OUT / "scan_short.json"
 CACHE_LONG = _OUT / "scan_long.json"
+CACHE_BACKTEST = _OUT / "backtest.json"
 CACHE_QUOTES = DATA_DIR / "quotes.json"
 SEED_SHORT = DATA_DIR / "seed_scan_short.json"
 SEED_LONG = DATA_DIR / "seed_scan_long.json"
