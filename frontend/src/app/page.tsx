@@ -2,40 +2,65 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <div className="hero">
-      <h1>stockIO</h1>
-      <p>
-        自動掃描美股（S&P / Nasdaq / 主要 ETF），用技術指標同趨勢俾你短線同長線建議。
-        加入主畫面就可以當 App 用——唔使登入。
-      </p>
-      <div className="hero-actions">
-        <Link href="/short">睇短線建議</Link>
-        <Link href="/long" className="secondary">
-          睇長線 / ETF
-        </Link>
-        <Link href="/watchlist" className="secondary">
-          我的關注
-        </Link>
+    <section>
+      <div className="hero-card">
+        <p className="hero-kicker">MARKETS</p>
+        <h1>stockIO</h1>
+        <p>掃描美股市場，用技術同趨勢畀你清晰建議。加入主畫面，手感接近原生 App。</p>
       </div>
 
-      <div className="feature-grid">
-        <article className="feature">
-          <h3>市場主動推介</h3>
-          <p>唔使先揀股。系統掃市場池，排出偏多 / 偏淡名單。</p>
-        </article>
-        <article className="feature">
-          <h3>技術 + 知識</h3>
-          <p>RSI、MACD、均線、支撐阻力、財報日期、新聞，全部喺詳情頁。</p>
-        </article>
-        <article className="feature">
-          <h3>建議持有期</h3>
-          <p>短線約 3–10 個交易日；長線用月線思維（3–12 個月）。只供參考。</p>
-        </article>
+      <p className="group-header">快速開始</p>
+      <div className="quick-grid">
+        <Link href="/short" className="quick-link" style={{ animationDelay: "0.05s" }}>
+          <span className="quick-icon blue">↗</span>
+          <div>
+            <strong>短線</strong>
+            <span>3–10 個交易日技術訊號</span>
+          </div>
+        </Link>
+        <Link href="/long" className="quick-link" style={{ animationDelay: "0.1s" }}>
+          <span className="quick-icon green">◇</span>
+          <div>
+            <strong>長線</strong>
+            <span>ETF 同趨勢配置</span>
+          </div>
+        </Link>
+        <Link href="/watchlist" className="quick-link" style={{ animationDelay: "0.15s" }}>
+          <span className="quick-icon orange">★</span>
+          <div>
+            <strong>關注</strong>
+            <span>你自己嘅清單</span>
+          </div>
+        </Link>
+        <div className="quick-link" style={{ animationDelay: "0.2s" }}>
+          <span className="quick-icon gray">＋</span>
+          <div>
+            <strong>加主畫面</strong>
+            <span>Safari → 分享 → 加入</span>
+          </div>
+        </div>
       </div>
 
-      <p className="disclaimer">
-        iPhone：用 Safari 打開 → 分享 →「加入主畫面」。資料來自 Yahoo Finance（非官方），只供學習參考，唔係投資建議。
-      </p>
-    </div>
+      <p className="group-header">點樣用</p>
+      <div className="inset-list">
+        <div className="inset-row">
+          <dt>主動推介</dt>
+          <dd>唔使先揀股</dd>
+        </div>
+        <div className="inset-row">
+          <dt>建議格式</dt>
+          <dd>買 / 持有 / 避開</dd>
+        </div>
+        <div className="inset-row">
+          <dt>詳情包含</dt>
+          <dd>支撐 · 財報 · 新聞</dd>
+        </div>
+        <div className="inset-row">
+          <dt>更新</dt>
+          <dd>報價約 3 分鐘</dd>
+        </div>
+      </div>
+      <p className="group-footer">只供學習同朋友參考，唔係投資建議。數據來自 Yahoo Finance。</p>
+    </section>
   );
 }

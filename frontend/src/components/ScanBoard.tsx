@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { fetchMarketStatus, fetchQuotes, fetchScan, triggerRefresh } from "@/lib/api";
 import { loadWatchlist, toggleWatch } from "@/lib/watchlist";
 import type { ScanResponse, StockRow } from "@/lib/types";
@@ -11,6 +11,8 @@ type Props = {
   title: string;
   subtitle: string;
 };
+
+type Tab = "buy" | "avoid" | "top";
 
 function mergeQuotes(rows: StockRow[], quotes: Record<string, { price: number; change_pct: number }>) {
   return rows.map((r) => {
@@ -27,21 +29,25 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
   const [watch, setWatch] = useState<string[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [quoteAt, setQuoteAt] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("buy");
 
-  const load = useCallback(async (refresh = false) => {
-    setError(null);
-    if (refresh) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const scan = await fetchScan(mode, refresh);
-      setData(scan);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "載入失敗");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [mode]);
+  const load = useCallback(
+    async (refresh = false) => {
+      setError(null);
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const scan = await fetchScan(mode, refresh);
+        setData(scan);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "載入失敗");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [mode]
+  );
 
   useEffect(() => {
     setWatch(loadWatchlist());
@@ -59,15 +65,13 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
 
   useEffect(() => {
     if (!tickers.length) return;
-
     let cancelled = false;
     const refreshQuotes = async () => {
       try {
         const status = await fetchMarketStatus();
         if (!cancelled) setIsOpen(status.is_open);
-        // Refresh quotes every 3 min always (also useful after hours for last price)
         const q = await fetchQuotes(tickers, true);
-        if (cancelled || !data) return;
+        if (cancelled) return;
         setData((prev) => {
           if (!prev) return prev;
           return {
@@ -81,10 +85,9 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
         });
         setQuoteAt(q.updated_at_iso || new Date().toISOString());
       } catch {
-        /* ignore quote errors */
+        /* ignore */
       }
     };
-
     refreshQuotes();
     const id = window.setInterval(refreshQuotes, 3 * 60 * 1000);
     return () => {
@@ -94,82 +97,93 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tickers.join(",")]);
 
-  const onToggle = (ticker: string) => {
-    setWatch(toggleWatch(ticker));
-  };
+  const rows = useMemo(() => {
+    if (!data) return [] as StockRow[];
+    if (tab === "buy") {
+      return data.bullish?.length ? data.bullish : data.top.filter((r) => r.label === "買");
+    }
+    if (tab === "avoid") return data.bearish || [];
+    return data.top || [];
+  }, [data, tab]);
+
+  const onToggle = (ticker: string) => setWatch(toggleWatch(ticker));
 
   const onRescore = async () => {
     setRefreshing(true);
     try {
       const res = await triggerRefresh(mode);
       await load(false);
-      alert(res.message || "分數由 GitHub Actions 定時更新；報價會繼續自動刷新。");
+      alert(res.message || "分數由系統定時更新；報價會繼續自動刷新。");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "重新計分失敗");
+      setError(e instanceof Error ? e.message : "更新失敗");
     } finally {
       setRefreshing(false);
     }
   };
 
   return (
-    <section className="page">
-      <div className="page-head">
-        <div>
-          <h1>{title}</h1>
-          <p className="lede">{subtitle}</p>
-        </div>
-        <div className="head-meta">
-          <span className={isOpen ? "pill open" : "pill closed"}>{isOpen ? "開市中" : "已收市"}</span>
-          <button type="button" className="btn" onClick={onRescore} disabled={refreshing}>
-            {refreshing ? "更新中…" : "重新計分"}
-          </button>
-        </div>
+    <section>
+      <h1 className="large-title">{title}</h1>
+      <p className="page-sub">{subtitle}</p>
+
+      <div className="page-toolbar">
+        <span className={isOpen ? "status-dot open" : "status-dot"}>{isOpen ? "開市中" : "已收市"}</span>
+        <button type="button" className="btn btn-ghost" onClick={onRescore} disabled={refreshing}>
+          {refreshing ? "更新中" : "關於更新"}
+        </button>
       </div>
 
-      {data?.updated_at_iso && (
-        <p className="meta-line">
-          分數更新：{new Date(data.updated_at_iso).toLocaleString()}
-          {quoteAt ? ` · 報價：${new Date(quoteAt).toLocaleString()}` : ""}
-          {data.scanned ? ` · 已掃描 ${data.scanned} 隻` : ""}
+      {(data?.updated_at_iso || quoteAt) && (
+        <p className="meta-caption">
+          {data?.updated_at_iso ? `分數 ${new Date(data.updated_at_iso).toLocaleString()}` : ""}
+          {quoteAt ? ` · 報價 ${new Date(quoteAt).toLocaleTimeString()}` : ""}
+          {data?.scanned ? ` · ${data.scanned} 隻` : ""}
         </p>
       )}
 
-      {loading && <p className="state">載入市場掃描…第一次可能要一兩分鐘。</p>}
-      {error && <p className="state error">錯誤：{error}（請確認後端已啟動）</p>}
+      <div className="segmented" role="tablist" aria-label="名單類型">
+        <button type="button" className={tab === "buy" ? "active" : ""} onClick={() => setTab("buy")}>
+          偏多
+        </button>
+        <button type="button" className={tab === "avoid" ? "active" : ""} onClick={() => setTab("avoid")}>
+          偏淡
+        </button>
+        <button type="button" className={tab === "top" ? "active" : ""} onClick={() => setTab("top")}>
+          最高分
+        </button>
+      </div>
 
-      {data && !loading && (
+      {loading && (
+        <div className="group">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton" />
+          ))}
+        </div>
+      )}
+
+      {error && <div className="state-box error">{error}</div>}
+
+      {!loading && data && (
         <>
-          <div className="board-grid">
-            <section>
-              <h2>偏多 · 買</h2>
-              <div className="list">
-                {(data.bullish?.length ? data.bullish : data.top.filter((r) => r.label === "買")).map((r) => (
-                  <StockCard key={r.ticker} row={r} watched={watch.includes(r.ticker)} onToggleWatch={onToggle} />
-                ))}
-                {!data.bullish?.length && !data.top.some((r) => r.label === "買") && <p className="empty">暫無偏多標的</p>}
-              </div>
-            </section>
-            <section>
-              <h2>偏淡 · 避開</h2>
-              <div className="list">
-                {data.bearish.map((r) => (
-                  <StockCard key={r.ticker} row={r} watched={watch.includes(r.ticker)} onToggleWatch={onToggle} />
-                ))}
-                {!data.bearish?.length && <p className="empty">暫無偏淡標的</p>}
-              </div>
-            </section>
+          <p className="group-header">
+            {tab === "buy" ? "建議關注 · 買" : tab === "avoid" ? "暫避 · 避開" : "分數排名"}
+          </p>
+          <div className="group">
+            {rows.length ? (
+              rows.map((r, i) => (
+                <StockCard
+                  key={`${tab}-${r.ticker}`}
+                  row={r}
+                  watched={watch.includes(r.ticker)}
+                  onToggleWatch={onToggle}
+                  style={{ animationDelay: `${i * 0.03}s` } as CSSProperties}
+                />
+              ))
+            ) : (
+              <div className="state-box">暫時冇呢類標的</div>
+            )}
           </div>
-
-          <section className="mt">
-            <h2>分數最高</h2>
-            <div className="list">
-              {data.top.map((r) => (
-                <StockCard key={`top-${r.ticker}`} row={r} watched={watch.includes(r.ticker)} onToggleWatch={onToggle} />
-              ))}
-            </div>
-          </section>
-
-          {data.disclaimer && <p className="disclaimer">{data.disclaimer}</p>}
+          {data.disclaimer && <p className="group-footer">{data.disclaimer}</p>}
         </>
       )}
     </section>

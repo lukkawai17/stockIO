@@ -1,11 +1,11 @@
 {
   "name": "stockIO",
   "short_name": "stockIO",
-  "description": "美股市場掃描與投資建議（學習用）",
+  "description": "美股市場掃描與投資建議",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#EEF2F4",
-  "theme_color": "#0F3D2E",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
   "lang": "zh-Hant",
   "icons": [
     {
