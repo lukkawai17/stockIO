@@ -37,6 +37,18 @@ export type Snapshot = {
 
 export type Pillars = Record<string, number | null | undefined>;
 
+export type PriceLevels = {
+  /** Preferred entry (often mid of zone or market if OK). */
+  buy: number | null;
+  buy_low: number | null;
+  buy_high: number | null;
+  /** Take-profit / trim level. */
+  sell: number | null;
+  /** Stop-loss reference. */
+  stop: number | null;
+  note: string;
+};
+
 export type ScoreResult = {
   score: number;
   label: "買" | "持有" | "避開";
@@ -47,6 +59,7 @@ export type ScoreResult = {
   horizon: string;
   hold_period: string;
   knowledge: string;
+  levels: PriceLevels;
 };
 
 export type Fundamentals = {
@@ -155,6 +168,170 @@ function applyBuyGate(
 
 function buyGateCap(score: number) {
   return Math.min(score, 68.5);
+}
+
+/** Fill buy/sell levels onto a scan row when missing (older scan JSON). */
+export function enrichRowLevels(
+  row: {
+    price: number;
+    label: ScoreResult["label"];
+    buy_price?: number | null;
+    sell_price?: number | null;
+    stop_price?: number | null;
+    levels?: PriceLevels;
+    support_resistance?: SupportResistance;
+    ma20?: number;
+    ma50?: number;
+    ma200?: number | null;
+    atr_pct?: number | null;
+    rsi?: number;
+  },
+  horizon: "short" | "long"
+) {
+  if (row.levels || row.buy_price != null || row.sell_price != null) return row;
+  const sr = row.support_resistance;
+  if (!sr) return row;
+  const snap: Snapshot = {
+    price: row.price,
+    change_pct: 0,
+    ma20: row.ma20 ?? row.price,
+    ma50: row.ma50 ?? row.price,
+    ma200: row.ma200 ?? null,
+    rsi: row.rsi ?? 50,
+    macd: 0,
+    macd_signal: 0,
+    macd_hist: 0,
+    ret_5d: 0,
+    ret_20d: 0,
+    ret_63d: 0,
+    volume_ratio: 1,
+    atr_pct: row.atr_pct ?? null,
+    dist_52w_high_pct: null,
+    drawdown_20d_pct: 0,
+    ma_stack_bull: false,
+    ma_stack_bear: false,
+    golden_bias: false,
+    death_bias: false,
+    support_resistance: sr,
+    above_ma20: row.price > (row.ma20 ?? row.price),
+    above_ma50: row.price > (row.ma50 ?? row.price),
+    above_ma200: row.ma200 == null ? null : row.price > row.ma200,
+  };
+  const levels = suggestLevels(snap, row.label, horizon);
+  return {
+    ...row,
+    levels,
+    buy_price: levels.buy,
+    sell_price: levels.sell,
+    stop_price: levels.stop,
+  };
+}
+
+/** Recommend buy / sell / stop from S/R + ATR + MAs. Reference only. */
+export function suggestLevels(
+  snap: Snapshot,
+  label: ScoreResult["label"],
+  horizon: "short" | "long"
+): PriceLevels {
+  const p = snap.price;
+  const sr = snap.support_resistance;
+  const atrPct = snap.atr_pct ?? (horizon === "short" ? 2 : 2.5);
+  const atr = Math.max(p * (atrPct / 100), p * 0.008);
+  const support = sr.support;
+  const resistance = sr.resistance;
+  const ma20 = snap.ma20;
+  const ma50 = snap.ma50;
+  const ma200 = snap.ma200;
+
+  if (label === "避開") {
+    return {
+      buy: null,
+      buy_low: null,
+      buy_high: null,
+      sell: round(p),
+      stop: null,
+      note: horizon === "short" ? "暫不建議買入；若持倉可考慮減倉／離場。" : "長線暫避；若持倉可考慮逢高減倉。",
+    };
+  }
+
+  let stop = support - atr * (horizon === "short" ? 0.35 : 0.5);
+  if (horizon === "long" && ma200 != null) stop = Math.min(stop, ma200 * 0.985);
+  stop = Math.min(stop, p - atr * 0.6);
+  if (stop >= p * 0.995) stop = p - atr;
+
+  let sell = resistance;
+  if (sell <= p * 1.01) sell = p + atr * (horizon === "short" ? 1.8 : 3);
+  if (horizon === "long") sell = Math.max(sell, p + atr * 3);
+
+  let buyLow: number;
+  let buyHigh: number;
+  let buy: number;
+  let note: string;
+
+  if (label === "買") {
+    if (horizon === "short") {
+      const stretched = sr.distance_to_support_pct > 5 && snap.rsi > 65;
+      if (stretched) {
+        buyLow = Math.max(support * 1.005, p - atr * 2);
+        buyHigh = Math.min(ma20, (support + p) / 2);
+        if (buyHigh <= buyLow) buyHigh = buyLow + atr * 0.4;
+        buy = round((buyLow + buyHigh) / 2);
+        note = "現價偏高，建議等回調至買入區間；止蝕喺支撐下，目標睇賣出價。";
+      } else {
+        buyLow = Math.max(support * 1.002, p - atr * 0.8);
+        buyHigh = Math.max(buyLow, Math.min(p * 1.005, p + atr * 0.12));
+        buy = round(Math.min(p, (buyLow + buyHigh) / 2));
+        if (p <= buyHigh * 1.01) buy = round(p);
+        note = "可於買入區間進場（現價若喺區間內可考慮）；止蝕見下方，目標睇賣出價。";
+      }
+    } else {
+      const anchor = ma50 || support;
+      const stretched = ma50 != null && p > ma50 * 1.12;
+      if (stretched) {
+        buyLow = Math.max(support, anchor * 0.97);
+        buyHigh = Math.min(p, anchor * 1.03);
+        if (buyHigh <= buyLow) buyHigh = buyLow + atr;
+        buy = round((buyLow + buyHigh) / 2);
+        note = "偏離中期均線較遠，建議分批等回調買入；長線目標逢高減部分。";
+      } else {
+        buyLow = Math.max(support, anchor * 0.98);
+        buyHigh = p;
+        if (buyLow > p) buyLow = p * 0.97;
+        buy = round(p);
+        note = "可現價或分批於買入區間建倉；止蝕參考下方，賣出價作減倉目標。";
+      }
+    }
+  } else {
+    // 持有：更好嘅加倉位 + 減倉目標
+    buyLow = support * 1.005;
+    buyHigh =
+      horizon === "short"
+        ? Math.min(ma20, p * 0.995)
+        : Math.min(ma50 || p * 0.98, p * 0.99);
+    if (buyHigh <= buyLow) {
+      buyLow = support;
+      buyHigh = support + atr * 0.5;
+    }
+    buy = round((buyLow + buyHigh) / 2);
+    note = "暫持有；想加倉等回調至買入區間；可於賣出價附近減倉。";
+  }
+
+  // Keep ordering: stop < buy_low <= buy <= buy_high < sell
+  buyLow = Math.min(buyLow, buyHigh);
+  buyHigh = Math.max(buyLow, buyHigh);
+  if (buy < buyLow) buy = buyLow;
+  if (buy > buyHigh) buy = buyHigh;
+  if (sell <= buyHigh) sell = buyHigh + atr * (horizon === "short" ? 1.2 : 2);
+  if (stop >= buyLow) stop = buyLow - atr * 0.35;
+
+  return {
+    buy: round(buy),
+    buy_low: round(buyLow),
+    buy_high: round(buyHigh),
+    sell: round(sell),
+    stop: round(stop),
+    note,
+  };
 }
 
 export function computeSnapshot(bars: Bar[]): Snapshot | null {
@@ -364,6 +541,7 @@ export function scoreShort(snap: Snapshot): ScoreResult {
   label = gated.label;
   if (gated.gated) reasons.unshift("確認不足：未達跨柱齊備，暫不標「買」");
 
+  const levels = suggestLevels(snap, label, "short");
   return {
     score: round(score, 1),
     label,
@@ -381,6 +559,7 @@ export function scoreShort(snap: Snapshot): ScoreResult {
           : gated.gated
             ? "分數尚可但確認不足。寧願錯過，唔好硬上。"
             : "多因子中性。可觀望等待更多確認。",
+    levels,
   };
 }
 
@@ -551,6 +730,7 @@ export function scoreLong(
   }
 
   const relTxt = vsSpyRet20d == null ? "" : vsSpyRet20d > 0 ? "相對大市較強。" : "相對大市偏弱。";
+  const levels = suggestLevels(snap, label, "long");
   return {
     score: round(score, 1),
     label,
@@ -568,5 +748,6 @@ export function scoreLong(
           : gated.gated
             ? `分數尚可但確認不足。${relTxt}等絕對+相對齊備再考慮加倉。`
             : `長線中性。${relTxt}核心倉可留，避免一次加倉。`,
+    levels,
   };
 }

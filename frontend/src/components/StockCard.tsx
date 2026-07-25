@@ -40,6 +40,23 @@ export function StockCard({ row, watched, onToggleWatch, style }: Props) {
           )}
         </div>
         <p className="stock-reason">{row.reason}</p>
+        {(row.buy_price != null || row.sell_price != null || row.levels) && (
+          <p className="stock-levels">
+            {row.buy_price != null || row.levels?.buy != null ? (
+              <span className="up">
+                買 ${(row.buy_price ?? row.levels?.buy)?.toFixed(2)}
+              </span>
+            ) : (
+              <span>買 —</span>
+            )}
+            <span className="levels-sep">·</span>
+            {(row.sell_price != null || row.levels?.sell != null) && (
+              <span className="down">
+                賣 ${(row.sell_price ?? row.levels?.sell)?.toFixed(2)}
+              </span>
+            )}
+          </p>
+        )}
       </Link>
       <Link href={`/stock/${row.ticker}`} className="stock-cell-right">
         <span className="stock-price">${row.price.toFixed(2)}</span>

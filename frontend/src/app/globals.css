@@ -309,6 +309,18 @@ textarea {
   text-overflow: ellipsis;
 }
 
+.stock-levels {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.1px;
+}
+
+.levels-sep {
+  margin: 0 5px;
+  color: var(--secondary);
+}
+
 .stock-cell-right {
   display: flex;
   flex-direction: column;

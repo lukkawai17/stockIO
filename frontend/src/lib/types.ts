@@ -10,6 +10,15 @@ export type SupportResistance = {
   distance_to_resistance_pct: number;
 };
 
+export type PriceLevels = {
+  buy: number | null;
+  buy_low: number | null;
+  buy_high: number | null;
+  sell: number | null;
+  stop: number | null;
+  note: string;
+};
+
 export type StockRow = {
   ticker: string;
   name?: string;
@@ -22,6 +31,10 @@ export type StockRow = {
   horizon?: string;
   hold_period?: string;
   knowledge?: string;
+  levels?: PriceLevels;
+  buy_price?: number | null;
+  sell_price?: number | null;
+  stop_price?: number | null;
   rsi?: number;
   macd_hist?: number;
   ret_5d?: number;
@@ -71,6 +84,7 @@ export type StockDetail = {
     knowledge: string;
     pillars?: Record<string, number | null | undefined>;
     framework?: string;
+    levels?: PriceLevels;
   };
   long: {
     score: number;
@@ -81,6 +95,7 @@ export type StockDetail = {
     knowledge: string;
     pillars?: Record<string, number | null | undefined>;
     framework?: string;
+    levels?: PriceLevels;
   };
   support_resistance: SupportResistance;
   chart?: {

@@ -39,6 +39,112 @@ def _apply_buy_gate(
     return min(score, 68.5), "持有", True
 
 
+def suggest_levels(snap: dict, label: str, horizon: str = "short") -> dict:
+    """Recommend buy / sell / stop from S/R + ATR + MAs. Reference only."""
+    p = float(snap.get("price") or 0)
+    sr = snap.get("support_resistance") or {}
+    atr_pct = snap.get("atr_pct")
+    if atr_pct is None:
+        atr_pct = 2.0 if horizon == "short" else 2.5
+    atr = max(p * (float(atr_pct) / 100.0), p * 0.008)
+    support = float(sr.get("support") or p * 0.97)
+    resistance = float(sr.get("resistance") or p * 1.03)
+    ma20 = float(snap.get("ma20") or p)
+    ma50 = snap.get("ma50")
+    ma50 = float(ma50) if ma50 is not None else None
+    ma200 = snap.get("ma200")
+    ma200 = float(ma200) if ma200 is not None else None
+    rsi = float(snap.get("rsi") or 50)
+    ds = float(sr.get("distance_to_support_pct") or 0)
+
+    def r(n: float) -> float:
+        return round(n, 2)
+
+    if label == "避開":
+        return {
+            "buy": None,
+            "buy_low": None,
+            "buy_high": None,
+            "sell": r(p),
+            "stop": None,
+            "note": "暫不建議買入；若持倉可考慮減倉／離場。"
+            if horizon == "short"
+            else "長線暫避；若持倉可考慮逢高減倉。",
+        }
+
+    stop = support - atr * (0.35 if horizon == "short" else 0.5)
+    if horizon == "long" and ma200 is not None:
+        stop = min(stop, ma200 * 0.985)
+    stop = min(stop, p - atr * 0.6)
+    if stop >= p * 0.995:
+        stop = p - atr
+
+    sell = resistance
+    if sell <= p * 1.01:
+        sell = p + atr * (1.8 if horizon == "short" else 3)
+    if horizon == "long":
+        sell = max(sell, p + atr * 3)
+
+    if label == "買":
+        if horizon == "short":
+            stretched = ds > 5 and rsi > 65
+            if stretched:
+                buy_low = max(support * 1.005, p - atr * 2)
+                buy_high = min(ma20, (support + p) / 2)
+                if buy_high <= buy_low:
+                    buy_high = buy_low + atr * 0.4
+                buy = (buy_low + buy_high) / 2
+                note = "現價偏高，建議等回調至買入區間；止蝕喺支撐下，目標睇賣出價。"
+            else:
+                buy_low = max(support * 1.002, p - atr * 0.8)
+                buy_high = max(buy_low, min(p * 1.005, p + atr * 0.12))
+                buy = min(p, (buy_low + buy_high) / 2)
+                if p <= buy_high * 1.01:
+                    buy = p
+                note = "可於買入區間進場（現價若喺區間內可考慮）；止蝕見下方，目標睇賣出價。"
+        else:
+            anchor = ma50 if ma50 is not None else support
+            stretched = ma50 is not None and p > ma50 * 1.12
+            if stretched:
+                buy_low = max(support, anchor * 0.97)
+                buy_high = min(p, anchor * 1.03)
+                if buy_high <= buy_low:
+                    buy_high = buy_low + atr
+                buy = (buy_low + buy_high) / 2
+                note = "偏離中期均線較遠，建議分批等回調買入；長線目標逢高減部分。"
+            else:
+                buy_low = max(support, anchor * 0.98)
+                buy_high = p
+                if buy_low > p:
+                    buy_low = p * 0.97
+                buy = p
+                note = "可現價或分批於買入區間建倉；止蝕參考下方，賣出價作減倉目標。"
+    else:
+        buy_low = support * 1.005
+        buy_high = min(ma20, p * 0.995) if horizon == "short" else min(ma50 or p * 0.98, p * 0.99)
+        if buy_high <= buy_low:
+            buy_low = support
+            buy_high = support + atr * 0.5
+        buy = (buy_low + buy_high) / 2
+        note = "暫持有；想加倉等回調至買入區間；可於賣出價附近減倉。"
+
+    buy_low, buy_high = min(buy_low, buy_high), max(buy_low, buy_high)
+    buy = min(max(buy, buy_low), buy_high)
+    if sell <= buy_high:
+        sell = buy_high + atr * (1.2 if horizon == "short" else 2)
+    if stop >= buy_low:
+        stop = buy_low - atr * 0.35
+
+    return {
+        "buy": r(buy),
+        "buy_low": r(buy_low),
+        "buy_high": r(buy_high),
+        "sell": r(sell),
+        "stop": r(stop),
+        "note": note,
+    }
+
+
 def _pillar_trend_short(snap: dict, reasons: list[str]) -> float:
     s = 50.0
     if snap.get("above_ma20"):
@@ -205,6 +311,7 @@ def score_short(snap: dict) -> dict:
         reasons.insert(0, "確認不足：未達跨柱齊備，暫不標「買」")
 
     hold_days = "3–10 個交易日" if label == "買" else ("5–15 個交易日" if label == "持有" else "暫觀望 / 等更好位置")
+    levels = suggest_levels(snap, label, "short")
 
     return {
         "score": round(score, 1),
@@ -216,6 +323,10 @@ def score_short(snap: dict) -> dict:
         "horizon": "短線",
         "hold_period": hold_days,
         "knowledge": _short_knowledge(label, pillars, gated),
+        "levels": levels,
+        "buy_price": levels.get("buy"),
+        "sell_price": levels.get("sell"),
+        "stop_price": levels.get("stop"),
     }
 
 
@@ -342,6 +453,7 @@ def score_long(snap: dict, vs_spy_ret_20d: float | None = None, fundamentals: di
         reasons.insert(0, "確認不足：雙動能未齊，暫不標「買」")
 
     hold_days = "3–12 個月" if label == "買" else ("1–6 個月觀察" if label == "持有" else "長線暫避 / 等趨勢轉好")
+    levels = suggest_levels(snap, label, "long")
 
     return {
         "score": round(score, 1),
@@ -353,6 +465,10 @@ def score_long(snap: dict, vs_spy_ret_20d: float | None = None, fundamentals: di
         "horizon": "長線",
         "hold_period": hold_days,
         "knowledge": _long_knowledge(label, vs_spy_ret_20d, pillars, gated),
+        "levels": levels,
+        "buy_price": levels.get("buy"),
+        "sell_price": levels.get("sell"),
+        "stop_price": levels.get("stop"),
     }
 
 

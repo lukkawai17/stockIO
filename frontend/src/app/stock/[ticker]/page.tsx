@@ -28,6 +28,50 @@ function fmtPct(n: number, digits = 1) {
   return `${sign}${(n * 100).toFixed(digits)}%`;
 }
 
+function LevelsBlock({
+  levels,
+}: {
+  levels?: {
+    buy: number | null;
+    buy_low: number | null;
+    buy_high: number | null;
+    sell: number | null;
+    stop: number | null;
+    note: string;
+  };
+}) {
+  if (!levels) return null;
+  const zone =
+    levels.buy_low != null && levels.buy_high != null
+      ? `$${levels.buy_low.toFixed(2)} – $${levels.buy_high.toFixed(2)}`
+      : "—";
+  return (
+    <>
+      <div className="inset-row">
+        <dt>建議買入</dt>
+        <dd className="up">{levels.buy != null ? `$${levels.buy.toFixed(2)}` : "暫不買"}</dd>
+      </div>
+      <div className="inset-row">
+        <dt>買入區間</dt>
+        <dd>{zone}</dd>
+      </div>
+      <div className="inset-row">
+        <dt>建議賣出</dt>
+        <dd className="down">{levels.sell != null ? `$${levels.sell.toFixed(2)}` : "—"}</dd>
+      </div>
+      <div className="inset-row">
+        <dt>止蝕參考</dt>
+        <dd>{levels.stop != null ? `$${levels.stop.toFixed(2)}` : "—"}</dd>
+      </div>
+      {levels.note && (
+        <p className="group-footer" style={{ margin: "4px 16px 8px" }}>
+          {levels.note}
+        </p>
+      )}
+    </>
+  );
+}
+
 export default function StockDetailPage() {
   const params = useParams<{ ticker: string }>();
   const ticker = (params?.ticker || "").toUpperCase();
@@ -137,6 +181,7 @@ export default function StockDetailPage() {
           <dt>觀察期</dt>
           <dd>{data.short.hold_period}</dd>
         </div>
+        <LevelsBlock levels={data.short.levels} />
         {data.short.pillars && (
           <div className="pillar-grid">
             {Object.entries(data.short.pillars)
@@ -184,6 +229,7 @@ export default function StockDetailPage() {
           <dt>觀察期</dt>
           <dd>{data.long.hold_period}</dd>
         </div>
+        <LevelsBlock levels={data.long.levels} />
         {data.long.pillars && (
           <div className="pillar-grid">
             {Object.entries(data.long.pillars)
