@@ -5,8 +5,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-CACHE_SHORT = DATA_DIR / "scan_short.json"
-CACHE_LONG = DATA_DIR / "scan_long.json"
+# Optional override for Vercel-only deploy (GitHub Actions writes into frontend/public/data)
+_OUT = Path(os.getenv("SCAN_OUT_DIR", str(DATA_DIR))).expanduser().resolve()
+_OUT.mkdir(parents=True, exist_ok=True)
+
+CACHE_SHORT = _OUT / "scan_short.json"
+CACHE_LONG = _OUT / "scan_long.json"
 CACHE_QUOTES = DATA_DIR / "quotes.json"
 SEED_SHORT = DATA_DIR / "seed_scan_short.json"
 SEED_LONG = DATA_DIR / "seed_scan_long.json"

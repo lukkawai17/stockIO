@@ -101,12 +101,12 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
   const onRescore = async () => {
     setRefreshing(true);
     try {
-      await triggerRefresh(mode);
-      // wait a bit then poll
-      await new Promise((r) => setTimeout(r, 2500));
-      await load(true);
+      const res = await triggerRefresh(mode);
+      await load(false);
+      alert(res.message || "分數由 GitHub Actions 定時更新；報價會繼續自動刷新。");
     } catch (e) {
       setError(e instanceof Error ? e.message : "重新計分失敗");
+    } finally {
       setRefreshing(false);
     }
   };

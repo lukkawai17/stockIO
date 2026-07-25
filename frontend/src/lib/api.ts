@@ -15,7 +15,7 @@ export function fetchScan(mode: "short" | "long", refresh = false) {
 }
 
 export function triggerRefresh(mode: "short" | "long") {
-  return getJSON<{ status: string }>(`/api/scan/${mode}/refresh`, { method: "POST" });
+  return getJSON<{ status: string; message?: string }>(`/api/scan/${mode}/refresh`, { method: "POST" });
 }
 
 export function fetchQuotes(symbols: string[], refresh = false): Promise<{
