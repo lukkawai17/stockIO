@@ -38,14 +38,20 @@ export type Snapshot = {
 export type Pillars = Record<string, number | null | undefined>;
 
 export type PriceLevels = {
-  /** Preferred entry (often mid of zone or market if OK). */
+  /** Preferred limit entry (mid of zone). Never chase by default. */
   buy: number | null;
   buy_low: number | null;
   buy_high: number | null;
-  /** Take-profit / trim level. */
+  /** Take-profit / trim level (min ~2R when possible). */
   sell: number | null;
   /** Stop-loss reference. */
   stop: number | null;
+  /** Reward / risk if entered at buy vs stop vs sell. */
+  risk_reward?: number | null;
+  /** Where price sits in support→resistance range (0=support, 1=resistance). */
+  range_position?: number | null;
+  /** limit_pullback | in_zone | wait_premium | trim | avoid */
+  entry_mode?: string;
   note: string;
 };
 
@@ -170,7 +176,7 @@ function buyGateCap(score: number) {
   return Math.min(score, 68.5);
 }
 
-/** Fill buy/sell levels onto a scan row when missing (older scan JSON). */
+/** Always recompute buy/sell levels for scan rows (keeps formula fresh). */
 export function enrichRowLevels(
   row: {
     price: number;
@@ -188,7 +194,6 @@ export function enrichRowLevels(
   },
   horizon: "short" | "long"
 ) {
-  if (row.levels || row.buy_price != null || row.sell_price != null) return row;
   const sr = row.support_resistance;
   if (!sr) return row;
   const snap: Snapshot = {
@@ -227,7 +232,16 @@ export function enrichRowLevels(
   };
 }
 
-/** Recommend buy / sell / stop from S/R + ATR + MAs. Reference only. */
+/**
+ * Safer buy/sell levels — blend of:
+ * - Pullback / confluence entry (MA + support, not chase)
+ * - Discount vs premium in S/R range (buy lower half)
+ * - ATR volatility buffer for stops
+ * - Minimum ~2:1 reward/risk before endorsing an entry
+ *
+ * Default is LIMIT on pullback. Market ≈ buy only if already in discount zone
+ * AND R:R still ≥ ~2.
+ */
 export function suggestLevels(
   snap: Snapshot,
   label: ScoreResult["label"],
@@ -237,11 +251,17 @@ export function suggestLevels(
   const sr = snap.support_resistance;
   const atrPct = snap.atr_pct ?? (horizon === "short" ? 2 : 2.5);
   const atr = Math.max(p * (atrPct / 100), p * 0.008);
-  const support = sr.support;
-  const resistance = sr.resistance;
-  const ma20 = snap.ma20;
-  const ma50 = snap.ma50;
-  const ma200 = snap.ma200;
+  let support = Math.min(sr.support, p);
+  let resistance = Math.max(sr.resistance, p);
+  // Ensure usable range
+  if (resistance - support < atr * 1.2) {
+    support = Math.min(support, p - atr * 1.5);
+    resistance = Math.max(resistance, p + atr * 2);
+  }
+  const range = Math.max(resistance - support, atr);
+  const rangePos = clamp((p - support) / range, 0, 1);
+  const maPull = horizon === "short" ? snap.ma20 : snap.ma50;
+  const deepMa = horizon === "short" ? snap.ma50 : snap.ma200 ?? snap.ma50;
 
   if (label === "避開") {
     return {
@@ -250,79 +270,134 @@ export function suggestLevels(
       buy_high: null,
       sell: round(p),
       stop: null,
-      note: horizon === "short" ? "暫不建議買入；若持倉可考慮減倉／離場。" : "長線暫避；若持倉可考慮逢高減倉。",
+      risk_reward: null,
+      range_position: round(rangePos, 2),
+      entry_mode: "avoid",
+      note:
+        horizon === "short"
+          ? "暫不建議買入；若持倉可考慮減倉／離場。"
+          : "長線暫避；若持倉可考慮逢高減倉。",
     };
   }
 
-  let stop = support - atr * (horizon === "short" ? 0.35 : 0.5);
-  if (horizon === "long" && ma200 != null) stop = Math.min(stop, ma200 * 0.985);
-  stop = Math.min(stop, p - atr * 0.6);
-  if (stop >= p * 0.995) stop = p - atr;
+  // --- Stop: structure + ATR buffer (classic 0.5–1.0 ATR beyond support) ---
+  let stop = support - atr * (horizon === "short" ? 0.5 : 0.75);
+  if (horizon === "long" && snap.ma200 != null) {
+    stop = Math.min(stop, snap.ma200 - atr * 0.5);
+  }
+  stop = Math.min(stop, p - atr * 1.2); // never tiny stop vs current chase
 
-  let sell = resistance;
-  if (sell <= p * 1.01) sell = p + atr * (horizon === "short" ? 1.8 : 3);
-  if (horizon === "long") sell = Math.max(sell, p + atr * 3);
+  // --- Ideal pullback / confluence buy zone (discount half of range) ---
+  // Fib-style: 38.2%–61.8% retracement from resistance down toward support
+  // = price levels from support + 0.382*range … support + 0.618*range for "mid"
+  // For longs we want the LOWER band: support → ~50% of range (discount).
+  const fib382 = support + range * 0.382;
+  const fib50 = support + range * 0.5;
+  const discountCap = support + range * 0.45; // stay in lower ~half
 
-  let buyLow: number;
-  let buyHigh: number;
-  let buy: number;
-  let note: string;
+  // Confluence anchors: max of support buffer and MAs that are still below price
+  const anchors = [support + atr * 0.15, maPull, deepMa]
+    .filter((x): x is number => x != null && Number.isFinite(x))
+    .map((x) => Math.min(x, p - atr * 0.05));
 
-  if (label === "買") {
-    if (horizon === "short") {
-      const stretched = sr.distance_to_support_pct > 5 && snap.rsi > 65;
-      if (stretched) {
-        buyLow = Math.max(support * 1.005, p - atr * 2);
-        buyHigh = Math.min(ma20, (support + p) / 2);
-        if (buyHigh <= buyLow) buyHigh = buyLow + atr * 0.4;
-        buy = round((buyLow + buyHigh) / 2);
-        note = "現價偏高，建議等回調至買入區間；止蝕喺支撐下，目標睇賣出價。";
-      } else {
-        buyLow = Math.max(support * 1.002, p - atr * 0.8);
-        buyHigh = Math.max(buyLow, Math.min(p * 1.005, p + atr * 0.12));
-        buy = round(Math.min(p, (buyLow + buyHigh) / 2));
-        if (p <= buyHigh * 1.01) buy = round(p);
-        note = "可於買入區間進場（現價若喺區間內可考慮）；止蝕見下方，目標睇賣出價。";
-      }
-    } else {
-      const anchor = ma50 || support;
-      const stretched = ma50 != null && p > ma50 * 1.12;
-      if (stretched) {
-        buyLow = Math.max(support, anchor * 0.97);
-        buyHigh = Math.min(p, anchor * 1.03);
-        if (buyHigh <= buyLow) buyHigh = buyLow + atr;
-        buy = round((buyLow + buyHigh) / 2);
-        note = "偏離中期均線較遠，建議分批等回調買入；長線目標逢高減部分。";
-      } else {
-        buyLow = Math.max(support, anchor * 0.98);
-        buyHigh = p;
-        if (buyLow > p) buyLow = p * 0.97;
-        buy = round(p);
-        note = "可現價或分批於買入區間建倉；止蝕參考下方，賣出價作減倉目標。";
-      }
-    }
-  } else {
-    // 持有：更好嘅加倉位 + 減倉目標
-    buyLow = support * 1.005;
-    buyHigh =
-      horizon === "short"
-        ? Math.min(ma20, p * 0.995)
-        : Math.min(ma50 || p * 0.98, p * 0.99);
-    if (buyHigh <= buyLow) {
-      buyLow = support;
-      buyHigh = support + atr * 0.5;
-    }
-    buy = round((buyLow + buyHigh) / 2);
-    note = "暫持有；想加倉等回調至買入區間；可於賣出價附近減倉。";
+  let buyLow = Math.max(support + atr * 0.1, Math.min(...anchors, fib382) - atr * 0.15);
+  let buyHigh = Math.min(discountCap, fib50, Math.max(maPull, support + atr));
+
+  // Prefer zone around MA pullback when MA is in discount
+  if (maPull < p && maPull > support) {
+    buyLow = Math.max(support + atr * 0.1, Math.min(maPull - atr * 0.35, buyLow));
+    buyHigh = Math.min(discountCap, Math.max(maPull + atr * 0.25, buyHigh * 0.5 + maPull * 0.5));
   }
 
-  // Keep ordering: stop < buy_low <= buy <= buy_high < sell
+  if (buyHigh <= buyLow) {
+    buyLow = support + atr * 0.1;
+    buyHigh = buyLow + atr * 0.8;
+  }
+  // Cap buy zone strictly below current when in premium — force pullback
+  const inPremium = rangePos >= 0.55 || snap.rsi >= 68 || sr.distance_to_resistance_pct <= 2.5;
+  const inDiscount = rangePos <= 0.42 && snap.rsi <= 60;
+
+  if (inPremium || label === "持有") {
+    buyHigh = Math.min(buyHigh, p - atr * 0.35, discountCap);
+    buyLow = Math.min(buyLow, buyHigh - atr * 0.4);
+    if (buyLow < support) buyLow = support + atr * 0.05;
+    if (buyHigh <= buyLow) {
+      buyLow = support + atr * 0.1;
+      buyHigh = Math.min(p - atr * 0.5, support + range * 0.4);
+    }
+  }
+
+  let buy = (buyLow + buyHigh) / 2;
+  let entryMode = "limit_pullback";
+  let note: string;
+
+  if (label === "持有") {
+    entryMode = "limit_pullback";
+    note = "暫持有。加倉只用限價等回調至買入區間；唔好現價追。";
+  } else if (inPremium) {
+    entryMode = "wait_premium";
+    buy = (buyLow + buyHigh) / 2;
+    note = "現價喺偏貴／貼近阻力區。等回調落入買入區間再用限價；追現價風險報酬差。";
+  } else if (inDiscount && p <= buyHigh * 1.01) {
+    // Already in discount — can use current as upper of zone, still prefer mid/limit
+    buyHigh = Math.min(buyHigh, p);
+    buy = Math.min(p, (buyLow + buyHigh) / 2);
+    // Only tag "in_zone" if mid is within ~0.4 ATR of price (close enough)
+    if (Math.abs(p - buy) <= atr * 0.45) {
+      entryMode = "in_zone";
+      buy = Math.min(p, buyHigh);
+      note = "現價已喺折讓區內，可用限價靠近區間上沿試倉；仍建議唔好市價追穿。";
+    } else {
+      entryMode = "limit_pullback";
+      note = "偏多但現價略高過理想中位，掛限價喺買入區間。";
+    }
+  } else {
+    entryMode = "limit_pullback";
+    buyHigh = Math.min(buyHigh, p - atr * 0.15);
+    if (buyHigh <= buyLow) {
+      buyLow = support + atr * 0.1;
+      buyHigh = Math.min(p - atr * 0.2, support + range * 0.4);
+    }
+    buy = (buyLow + buyHigh) / 2;
+    note = "偏多訊號：用限價等回調入場，唔用現價追。";
+  }
+
+  // --- Sell / TP: structure target with min ~2R from buy---stop ---
+  const risk = Math.max(buy - stop, atr * 0.8);
+  let sell = Math.max(resistance, buy + risk * 2);
+  // First realistic structural target: don't invent fantasy if resistance is the goal
+  const structuralTp = resistance > buy + atr * 0.5 ? resistance : buy + risk * 2;
+  sell = Math.max(structuralTp, buy + risk * 2);
+  // Cap extreme fantasy for short horizon
+  if (horizon === "short" && sell > buy + atr * 5) {
+    sell = Math.min(sell, Math.max(resistance, buy + risk * 2.2));
+  }
+
+  // Enforce ordering
   buyLow = Math.min(buyLow, buyHigh);
   buyHigh = Math.max(buyLow, buyHigh);
-  if (buy < buyLow) buy = buyLow;
-  if (buy > buyHigh) buy = buyHigh;
-  if (sell <= buyHigh) sell = buyHigh + atr * (horizon === "short" ? 1.2 : 2);
-  if (stop >= buyLow) stop = buyLow - atr * 0.35;
+  buy = clamp(buy, buyLow, buyHigh);
+  if (stop >= buyLow - atr * 0.05) stop = buyLow - atr * 0.5;
+  if (sell <= buy + risk) sell = buy + risk * 2;
+
+  // Final: never present buy >= current unless truly in_zone (small gap OK)
+  if (entryMode !== "in_zone" && buy >= p * 0.998) {
+    buyHigh = Math.min(buyHigh, p - atr * 0.25);
+    buyLow = Math.min(buyLow, buyHigh - atr * 0.35);
+    if (buyLow < support) buyLow = support + atr * 0.05;
+    buy = (buyLow + buyHigh) / 2;
+    entryMode = "limit_pullback";
+    note = "為保安全邊際，買入價設喺現價之下（回調限價），唔追現價。";
+  }
+
+  const riskFinal = Math.max(buy - stop, 1e-9);
+  const rr = (sell - buy) / riskFinal;
+
+  // If R:R still weak, push sell or deepen buy
+  if (rr < 1.8 && label === "買") {
+    sell = buy + riskFinal * 2;
+    note += " 已按最少約 2:1 風險報酬調整賣出目標。";
+  }
 
   return {
     buy: round(buy),
@@ -330,6 +405,9 @@ export function suggestLevels(
     buy_high: round(buyHigh),
     sell: round(sell),
     stop: round(stop),
+    risk_reward: round(Math.max((sell - buy) / Math.max(buy - stop, 1e-9), 0), 2),
+    range_position: round(rangePos, 2),
+    entry_mode: entryMode,
     note,
   };
 }

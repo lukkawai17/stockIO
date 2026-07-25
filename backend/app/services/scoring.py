@@ -40,22 +40,28 @@ def _apply_buy_gate(
 
 
 def suggest_levels(snap: dict, label: str, horizon: str = "short") -> dict:
-    """Recommend buy / sell / stop from S/R + ATR + MAs. Reference only."""
+    """
+    Safer buy/sell: pullback confluence + discount zone + ATR stop + ~2:1 R:R.
+    Default is LIMIT below market — do not chase current price.
+    """
     p = float(snap.get("price") or 0)
     sr = snap.get("support_resistance") or {}
     atr_pct = snap.get("atr_pct")
     if atr_pct is None:
         atr_pct = 2.0 if horizon == "short" else 2.5
     atr = max(p * (float(atr_pct) / 100.0), p * 0.008)
-    support = float(sr.get("support") or p * 0.97)
-    resistance = float(sr.get("resistance") or p * 1.03)
-    ma20 = float(snap.get("ma20") or p)
-    ma50 = snap.get("ma50")
-    ma50 = float(ma50) if ma50 is not None else None
-    ma200 = snap.get("ma200")
-    ma200 = float(ma200) if ma200 is not None else None
+    support = min(float(sr.get("support") or p * 0.97), p)
+    resistance = max(float(sr.get("resistance") or p * 1.03), p)
+    if resistance - support < atr * 1.2:
+        support = min(support, p - atr * 1.5)
+        resistance = max(resistance, p + atr * 2)
+    range_ = max(resistance - support, atr)
+    range_pos = max(0.0, min(1.0, (p - support) / range_))
     rsi = float(snap.get("rsi") or 50)
-    ds = float(sr.get("distance_to_support_pct") or 0)
+    ma_pull = float(snap.get("ma20") if horizon == "short" else snap.get("ma50") or p)
+    deep_ma = snap.get("ma50") if horizon == "short" else snap.get("ma200")
+    deep_ma = float(deep_ma) if deep_ma is not None else ma_pull
+    dist_res = float(sr.get("distance_to_resistance_pct") or 99)
 
     def r(n: float) -> float:
         return round(n, 2)
@@ -67,73 +73,105 @@ def suggest_levels(snap: dict, label: str, horizon: str = "short") -> dict:
             "buy_high": None,
             "sell": r(p),
             "stop": None,
+            "risk_reward": None,
+            "range_position": r(range_pos),
+            "entry_mode": "avoid",
             "note": "暫不建議買入；若持倉可考慮減倉／離場。"
             if horizon == "short"
             else "長線暫避；若持倉可考慮逢高減倉。",
         }
 
-    stop = support - atr * (0.35 if horizon == "short" else 0.5)
+    stop = support - atr * (0.5 if horizon == "short" else 0.75)
+    ma200 = snap.get("ma200")
     if horizon == "long" and ma200 is not None:
-        stop = min(stop, ma200 * 0.985)
-    stop = min(stop, p - atr * 0.6)
-    if stop >= p * 0.995:
-        stop = p - atr
+        stop = min(stop, float(ma200) - atr * 0.5)
+    stop = min(stop, p - atr * 1.2)
 
-    sell = resistance
-    if sell <= p * 1.01:
-        sell = p + atr * (1.8 if horizon == "short" else 3)
-    if horizon == "long":
-        sell = max(sell, p + atr * 3)
+    fib382 = support + range_ * 0.382
+    fib50 = support + range_ * 0.5
+    discount_cap = support + range_ * 0.45
+    anchors = [support + atr * 0.15, ma_pull, deep_ma]
+    anchors = [min(x, p - atr * 0.05) for x in anchors]
+    buy_low = max(support + atr * 0.1, min(anchors + [fib382]) - atr * 0.15)
+    buy_high = min(discount_cap, fib50, max(ma_pull, support + atr))
 
-    if label == "買":
-        if horizon == "short":
-            stretched = ds > 5 and rsi > 65
-            if stretched:
-                buy_low = max(support * 1.005, p - atr * 2)
-                buy_high = min(ma20, (support + p) / 2)
-                if buy_high <= buy_low:
-                    buy_high = buy_low + atr * 0.4
-                buy = (buy_low + buy_high) / 2
-                note = "現價偏高，建議等回調至買入區間；止蝕喺支撐下，目標睇賣出價。"
-            else:
-                buy_low = max(support * 1.002, p - atr * 0.8)
-                buy_high = max(buy_low, min(p * 1.005, p + atr * 0.12))
-                buy = min(p, (buy_low + buy_high) / 2)
-                if p <= buy_high * 1.01:
-                    buy = p
-                note = "可於買入區間進場（現價若喺區間內可考慮）；止蝕見下方，目標睇賣出價。"
-        else:
-            anchor = ma50 if ma50 is not None else support
-            stretched = ma50 is not None and p > ma50 * 1.12
-            if stretched:
-                buy_low = max(support, anchor * 0.97)
-                buy_high = min(p, anchor * 1.03)
-                if buy_high <= buy_low:
-                    buy_high = buy_low + atr
-                buy = (buy_low + buy_high) / 2
-                note = "偏離中期均線較遠，建議分批等回調買入；長線目標逢高減部分。"
-            else:
-                buy_low = max(support, anchor * 0.98)
-                buy_high = p
-                if buy_low > p:
-                    buy_low = p * 0.97
-                buy = p
-                note = "可現價或分批於買入區間建倉；止蝕參考下方，賣出價作減倉目標。"
-    else:
-        buy_low = support * 1.005
-        buy_high = min(ma20, p * 0.995) if horizon == "short" else min(ma50 or p * 0.98, p * 0.99)
+    if support < ma_pull < p:
+        buy_low = max(support + atr * 0.1, min(ma_pull - atr * 0.35, buy_low))
+        buy_high = min(discount_cap, max(ma_pull + atr * 0.25, buy_high * 0.5 + ma_pull * 0.5))
+
+    if buy_high <= buy_low:
+        buy_low = support + atr * 0.1
+        buy_high = buy_low + atr * 0.8
+
+    in_premium = range_pos >= 0.55 or rsi >= 68 or dist_res <= 2.5
+    in_discount = range_pos <= 0.42 and rsi <= 60
+
+    if in_premium or label == "持有":
+        buy_high = min(buy_high, p - atr * 0.35, discount_cap)
+        buy_low = min(buy_low, buy_high - atr * 0.4)
+        if buy_low < support:
+            buy_low = support + atr * 0.05
         if buy_high <= buy_low:
-            buy_low = support
-            buy_high = support + atr * 0.5
+            buy_low = support + atr * 0.1
+            buy_high = min(p - atr * 0.5, support + range_ * 0.4)
+
+    buy = (buy_low + buy_high) / 2
+    entry_mode = "limit_pullback"
+    note = ""
+
+    if label == "持有":
+        entry_mode = "limit_pullback"
+        note = "暫持有。加倉只用限價等回調至買入區間；唔好現價追。"
+    elif in_premium:
+        entry_mode = "wait_premium"
         buy = (buy_low + buy_high) / 2
-        note = "暫持有；想加倉等回調至買入區間；可於賣出價附近減倉。"
+        note = "現價喺偏貴／貼近阻力區。等回調落入買入區間再用限價；追現價風險報酬差。"
+    elif in_discount and p <= buy_high * 1.01:
+        buy_high = min(buy_high, p)
+        buy = min(p, (buy_low + buy_high) / 2)
+        if abs(p - buy) <= atr * 0.45:
+            entry_mode = "in_zone"
+            buy = min(p, buy_high)
+            note = "現價已喺折讓區內，可用限價靠近區間上沿試倉；仍建議唔好市價追穿。"
+        else:
+            entry_mode = "limit_pullback"
+            note = "偏多但現價略高過理想中位，掛限價喺買入區間。"
+    else:
+        entry_mode = "limit_pullback"
+        buy_high = min(buy_high, p - atr * 0.15)
+        if buy_high <= buy_low:
+            buy_low = support + atr * 0.1
+            buy_high = min(p - atr * 0.2, support + range_ * 0.4)
+        buy = (buy_low + buy_high) / 2
+        note = "偏多訊號：用限價等回調入場，唔用現價追。"
+
+    risk = max(buy - stop, atr * 0.8)
+    structural_tp = resistance if resistance > buy + atr * 0.5 else buy + risk * 2
+    sell = max(structural_tp, buy + risk * 2)
+    if horizon == "short" and sell > buy + atr * 5:
+        sell = min(sell, max(resistance, buy + risk * 2.2))
 
     buy_low, buy_high = min(buy_low, buy_high), max(buy_low, buy_high)
-    buy = min(max(buy, buy_low), buy_high)
-    if sell <= buy_high:
-        sell = buy_high + atr * (1.2 if horizon == "short" else 2)
-    if stop >= buy_low:
-        stop = buy_low - atr * 0.35
+    buy = max(buy_low, min(buy, buy_high))
+    if stop >= buy_low - atr * 0.05:
+        stop = buy_low - atr * 0.5
+    if sell <= buy + risk:
+        sell = buy + risk * 2
+
+    if entry_mode != "in_zone" and buy >= p * 0.998:
+        buy_high = min(buy_high, p - atr * 0.25)
+        buy_low = min(buy_low, buy_high - atr * 0.35)
+        if buy_low < support:
+            buy_low = support + atr * 0.05
+        buy = (buy_low + buy_high) / 2
+        entry_mode = "limit_pullback"
+        note = "為保安全邊際，買入價設喺現價之下（回調限價），唔追現價。"
+
+    risk_final = max(buy - stop, 1e-9)
+    rr = (sell - buy) / risk_final
+    if rr < 1.8 and label == "買":
+        sell = buy + risk_final * 2
+        note += " 已按最少約 2:1 風險報酬調整賣出目標。"
 
     return {
         "buy": r(buy),
@@ -141,6 +179,9 @@ def suggest_levels(snap: dict, label: str, horizon: str = "short") -> dict:
         "buy_high": r(buy_high),
         "sell": r(sell),
         "stop": r(stop),
+        "risk_reward": r(max((sell - buy) / max(buy - stop, 1e-9), 0)),
+        "range_position": r(range_pos),
+        "entry_mode": entry_mode,
         "note": note,
     }
 

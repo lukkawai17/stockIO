@@ -16,6 +16,9 @@ export type PriceLevels = {
   buy_high: number | null;
   sell: number | null;
   stop: number | null;
+  risk_reward?: number | null;
+  range_position?: number | null;
+  entry_mode?: string;
   note: string;
 };
 

@@ -30,6 +30,7 @@ function fmtPct(n: number, digits = 1) {
 
 function LevelsBlock({
   levels,
+  price,
 }: {
   levels?: {
     buy: number | null;
@@ -37,19 +38,36 @@ function LevelsBlock({
     buy_high: number | null;
     sell: number | null;
     stop: number | null;
+    risk_reward?: number | null;
+    range_position?: number | null;
+    entry_mode?: string;
     note: string;
   };
+  price: number;
 }) {
   if (!levels) return null;
   const zone =
     levels.buy_low != null && levels.buy_high != null
       ? `$${levels.buy_low.toFixed(2)} – $${levels.buy_high.toFixed(2)}`
       : "—";
+  const modeLabel =
+    levels.entry_mode === "wait_premium"
+      ? "等回調（偏貴區）"
+      : levels.entry_mode === "in_zone"
+        ? "已喺折讓區"
+        : levels.entry_mode === "limit_pullback"
+          ? "限價回調"
+          : levels.entry_mode === "avoid"
+            ? "暂不買入"
+            : null;
+  const buyBelow = levels.buy != null && levels.buy < price * 0.995;
   return (
     <>
       <div className="inset-row">
         <dt>建議買入</dt>
-        <dd className="up">{levels.buy != null ? `$${levels.buy.toFixed(2)}` : "暫不買"}</dd>
+        <dd className="up">
+          {levels.buy != null ? `$${levels.buy.toFixed(2)}${buyBelow ? "（限價）" : ""}` : "暫不買"}
+        </dd>
       </div>
       <div className="inset-row">
         <dt>買入區間</dt>
@@ -63,6 +81,18 @@ function LevelsBlock({
         <dt>止蝕參考</dt>
         <dd>{levels.stop != null ? `$${levels.stop.toFixed(2)}` : "—"}</dd>
       </div>
+      {levels.risk_reward != null && (
+        <div className="inset-row">
+          <dt>風險報酬</dt>
+          <dd>約 {levels.risk_reward.toFixed(1)} : 1</dd>
+        </div>
+      )}
+      {modeLabel && (
+        <div className="inset-row">
+          <dt>入場方式</dt>
+          <dd>{modeLabel}</dd>
+        </div>
+      )}
       {levels.note && (
         <p className="group-footer" style={{ margin: "4px 16px 8px" }}>
           {levels.note}
@@ -181,7 +211,7 @@ export default function StockDetailPage() {
           <dt>觀察期</dt>
           <dd>{data.short.hold_period}</dd>
         </div>
-        <LevelsBlock levels={data.short.levels} />
+        <LevelsBlock levels={data.short.levels} price={data.price} />
         {data.short.pillars && (
           <div className="pillar-grid">
             {Object.entries(data.short.pillars)
@@ -229,7 +259,7 @@ export default function StockDetailPage() {
           <dt>觀察期</dt>
           <dd>{data.long.hold_period}</dd>
         </div>
-        <LevelsBlock levels={data.long.levels} />
+        <LevelsBlock levels={data.long.levels} price={data.price} />
         {data.long.pillars && (
           <div className="pillar-grid">
             {Object.entries(data.long.pillars)

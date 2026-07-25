@@ -44,7 +44,7 @@ export function StockCard({ row, watched, onToggleWatch, style }: Props) {
           <p className="stock-levels">
             {row.buy_price != null || row.levels?.buy != null ? (
               <span className="up">
-                買 ${(row.buy_price ?? row.levels?.buy)?.toFixed(2)}
+                限 ${(row.buy_price ?? row.levels?.buy)?.toFixed(2)}
               </span>
             ) : (
               <span>買 —</span>
@@ -54,6 +54,18 @@ export function StockCard({ row, watched, onToggleWatch, style }: Props) {
               <span className="down">
                 賣 ${(row.sell_price ?? row.levels?.sell)?.toFixed(2)}
               </span>
+            )}
+            {(row.levels?.risk_reward != null || row.stop_price != null) && (
+              <>
+                <span className="levels-sep">·</span>
+                <span className="levels-rr">
+                  {row.levels?.risk_reward != null
+                    ? `R${row.levels.risk_reward.toFixed(1)}`
+                    : row.stop_price != null
+                      ? `止$${row.stop_price.toFixed(0)}`
+                      : ""}
+                </span>
+              </>
             )}
           </p>
         )}

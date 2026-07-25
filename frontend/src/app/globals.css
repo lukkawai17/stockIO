@@ -321,6 +321,10 @@ textarea {
   color: var(--secondary);
 }
 
+.levels-rr {
+  color: var(--secondary);
+}
+
 .stock-cell-right {
   display: flex;
   flex-direction: column;
