@@ -348,6 +348,14 @@ textarea {
   background: #8e8e93;
 }
 
+.up {
+  color: var(--green);
+}
+
+.down {
+  color: var(--red);
+}
+
 .row-meta {
   display: flex;
   align-items: center;
