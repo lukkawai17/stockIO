@@ -1,0 +1,51 @@
+name: Strategy Backtest
+
+on:
+  schedule:
+    # Weekly Sunday ~12:00 UTC
+    - cron: "0 12 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run strategy backtest
+        env:
+          SCAN_OUT_DIR: frontend/public/data
+        run: |
+          cd backend
+          python - <<'PY'
+          from app.services.backtest import run_backtest
+          out = run_backtest(force=True)
+          print("signals short", out.get("short", {}).get("signals"), "long", out.get("long", {}).get("signals"))
+          PY
+
+      - name: Commit backtest data
+        run: |
+          git config user.name "stockIO bot"
+          git config user.email "stockio-bot@users.noreply.github.com"
+          git add frontend/public/data/backtest.json
+          if git diff --staged --quiet; then
+            echo "No backtest changes"
+          else
+            git commit -m "chore: refresh strategy backtest"
+            git push
+          fi
