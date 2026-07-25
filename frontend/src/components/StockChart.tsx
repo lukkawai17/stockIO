@@ -26,19 +26,19 @@ export function StockChart({ data, up }: Props) {
     const el = wrapRef.current;
     if (!el || !data?.price?.length) return;
 
-    const accent = up ? "#34C759" : "#FF3B30";
+    const accent = up ? "#30D158" : "#FF453A";
     const chart = createChart(el, {
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(60, 60, 67, 0.6)",
+        textColor: "rgba(235, 235, 245, 0.55)",
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang HK", sans-serif',
         fontSize: 11,
         attributionLogo: false,
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: "rgba(60, 60, 67, 0.08)", style: LineStyle.Solid },
+        horzLines: { color: "rgba(84, 84, 88, 0.45)", style: LineStyle.Solid },
       },
       rightPriceScale: {
         borderVisible: false,
@@ -50,8 +50,8 @@ export function StockChart({ data, up }: Props) {
         fixRightEdge: true,
       },
       crosshair: {
-        horzLine: { labelBackgroundColor: "#007AFF" },
-        vertLine: { labelBackgroundColor: "#007AFF" },
+        horzLine: { labelBackgroundColor: "#0A84FF" },
+        vertLine: { labelBackgroundColor: "#0A84FF" },
       },
       handleScroll: { mouseWheel: false, pressedMouseMove: true },
       handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true },
@@ -60,8 +60,8 @@ export function StockChart({ data, up }: Props) {
 
     const priceSeries = chart.addSeries(AreaSeries, {
       lineColor: accent,
-      topColor: up ? "rgba(52, 199, 89, 0.28)" : "rgba(255, 59, 48, 0.22)",
-      bottomColor: up ? "rgba(52, 199, 89, 0.02)" : "rgba(255, 59, 48, 0.02)",
+      topColor: up ? "rgba(48, 209, 88, 0.32)" : "rgba(255, 69, 58, 0.28)",
+      bottomColor: up ? "rgba(48, 209, 88, 0.02)" : "rgba(255, 69, 58, 0.02)",
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: true,
@@ -76,7 +76,7 @@ export function StockChart({ data, up }: Props) {
 
     if (data.ma20.length) {
       const ma20 = chart.addSeries(LineSeries, {
-        color: "#007AFF",
+        color: "#0A84FF",
         lineWidth: 2,
         priceLineVisible: false,
         lastValueVisible: false,
@@ -87,7 +87,7 @@ export function StockChart({ data, up }: Props) {
 
     if (data.ma50.length) {
       const ma50 = chart.addSeries(LineSeries, {
-        color: "#AF52DE",
+        color: "#BF5AF2",
         lineWidth: 2,
         lineStyle: LineStyle.Solid,
         priceLineVisible: false,
@@ -100,7 +100,7 @@ export function StockChart({ data, up }: Props) {
     // Support / resistance horizontal lines on price series
     priceSeries.createPriceLine({
       price: data.support,
-      color: "#34C759",
+      color: "#30D158",
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,
@@ -108,7 +108,7 @@ export function StockChart({ data, up }: Props) {
     });
     priceSeries.createPriceLine({
       price: data.resistance,
-      color: "#FF3B30",
+      color: "#FF453A",
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,

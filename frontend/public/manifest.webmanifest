@@ -4,8 +4,8 @@
   "description": "美股市場掃描與投資建議",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F2F2F7",
-  "theme_color": "#F2F2F7",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "lang": "zh-Hant",
   "icons": [
     {

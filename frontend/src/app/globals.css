@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f2f2f7;
-  --bg-elevated: #ffffff;
-  --bg-grouped: #ffffff;
-  --bg-fill: rgba(120, 120, 128, 0.12);
-  --bg-fill-strong: rgba(120, 120, 128, 0.2);
-  --label: #000000;
-  --secondary: rgba(60, 60, 67, 0.6);
-  --tertiary: rgba(60, 60, 67, 0.3);
-  --separator: rgba(60, 60, 67, 0.12);
-  --blue: #007aff;
-  --green: #34c759;
-  --red: #ff3b30;
-  --orange: #ff9500;
-  --yellow: #ffcc00;
-  --buy: #34c759;
-  --hold: #ff9500;
-  --avoid: #ff3b30;
-  --shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  --bg: #000000;
+  --bg-elevated: #1c1c1e;
+  --bg-grouped: #1c1c1e;
+  --bg-fill: rgba(120, 120, 128, 0.28);
+  --bg-fill-strong: rgba(120, 120, 128, 0.4);
+  --label: #ffffff;
+  --secondary: rgba(235, 235, 245, 0.6);
+  --tertiary: rgba(235, 235, 245, 0.3);
+  --separator: rgba(84, 84, 88, 0.65);
+  --blue: #0a84ff;
+  --green: #30d158;
+  --red: #ff453a;
+  --orange: #ff9f0a;
+  --yellow: #ffd60a;
+  --buy: #30d158;
+  --hold: #ff9f0a;
+  --avoid: #ff453a;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
   --radius: 12px;
   --radius-lg: 16px;
   --tab-h: 52px;
@@ -40,12 +40,15 @@ body {
 }
 
 html {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
   color: var(--label);
-  background: var(--bg);
+  background:
+    radial-gradient(900px 420px at 50% -10%, rgba(10, 132, 255, 0.16), transparent 55%),
+    radial-gradient(700px 360px at 100% 20%, rgba(48, 209, 88, 0.06), transparent 45%),
+    var(--bg);
   font-family:
     -apple-system,
     BlinkMacSystemFont,
@@ -217,8 +220,9 @@ textarea {
 }
 
 .segmented button.active {
-  background: var(--bg-elevated);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04);
+  background: #636366;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .segmented button:active {
@@ -233,6 +237,7 @@ textarea {
   box-shadow: var(--shadow);
   margin-bottom: 20px;
   animation: fade-up 0.55s var(--ease) both;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .group-header {
@@ -361,17 +366,17 @@ textarea {
 
 .badge.buy {
   color: var(--green);
-  background: rgba(52, 199, 89, 0.14);
+  background: rgba(48, 209, 88, 0.18);
 }
 
 .badge.hold {
-  color: #c27803;
-  background: rgba(255, 149, 0, 0.16);
+  color: #ffd60a;
+  background: rgba(255, 159, 10, 0.18);
 }
 
 .badge.avoid {
   color: var(--red);
-  background: rgba(255, 59, 48, 0.14);
+  background: rgba(255, 69, 58, 0.18);
 }
 
 .score-chip {
@@ -398,12 +403,13 @@ textarea {
 
 /* —— Home overview —— */
 .hero-card {
-  background: linear-gradient(165deg, #1c1c1e 0%, #2c2c2e 55%, #3a3a3c 100%);
+  background: linear-gradient(155deg, #1c1c1e 0%, #111113 45%, #0a84ff22 100%);
   color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 20px;
   padding: 22px 20px 20px;
   margin-bottom: 22px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   animation: fade-up 0.5s var(--ease) both;
   position: relative;
   overflow: hidden;
@@ -412,9 +418,9 @@ textarea {
 .hero-card::after {
   content: "";
   position: absolute;
-  inset: auto -20% -40% 40%;
-  height: 160px;
-  background: radial-gradient(circle, rgba(10, 132, 255, 0.35), transparent 70%);
+  inset: auto -20% -40% 30%;
+  height: 180px;
+  background: radial-gradient(circle, rgba(10, 132, 255, 0.45), transparent 70%);
   pointer-events: none;
 }
 
@@ -458,6 +464,7 @@ textarea {
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   box-shadow: var(--shadow);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   transition: transform 0.2s var(--spring);
   animation: fade-up 0.55s var(--ease) both;
 }
@@ -536,6 +543,7 @@ textarea {
   overflow: hidden;
   margin-bottom: 20px;
   animation: fade-up 0.5s var(--ease) both;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .inset-row {
@@ -637,7 +645,7 @@ textarea {
 .skeleton {
   height: 64px;
   margin: 0 0 1px;
-  background: linear-gradient(90deg, #eee 25%, #f7f7f7 37%, #eee 63%);
+  background: linear-gradient(90deg, #1c1c1e 25%, #2c2c2e 37%, #1c1c1e 63%);
   background-size: 400% 100%;
   animation: shimmer 1.2s ease infinite;
 }
@@ -645,7 +653,7 @@ textarea {
 .textarea {
   width: 100%;
   min-height: 88px;
-  border: none;
+  border: 1px solid var(--separator);
   border-radius: 12px;
   padding: 12px 14px;
   background: var(--bg-elevated);
@@ -670,7 +678,7 @@ textarea {
   bottom: 0;
   z-index: 50;
   padding-bottom: var(--safe-b);
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(22, 22, 24, 0.86);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-top: 0.5px solid var(--separator);
@@ -731,6 +739,7 @@ textarea {
   margin-bottom: 20px;
   box-shadow: var(--shadow);
   animation: fade-up 0.48s var(--ease) both;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .chart-canvas {
@@ -768,7 +777,7 @@ textarea {
   background: var(--blue);
 }
 .chart-legend i.ma50 {
-  background: #af52de;
+  background: #bf5af2;
 }
 .chart-legend i.support {
   background: var(--green);
