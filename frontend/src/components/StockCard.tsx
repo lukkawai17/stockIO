@@ -1,7 +1,6 @@
-"use client";
-
 import Link from "next/link";
 import { LabelBadge } from "./LabelBadge";
+import { PriceChange } from "./PriceChange";
 import type { StockRow } from "@/lib/types";
 import type { CSSProperties } from "react";
 
@@ -13,10 +12,6 @@ type Props = {
 };
 
 export function StockCard({ row, watched, onToggleWatch, style }: Props) {
-  const up = row.change_pct > 0;
-  const down = row.change_pct < 0;
-  const chgClass = up ? "chg up" : down ? "chg down" : "chg flat";
-
   return (
     <div className="stock-cell" style={style}>
       <Link href={`/stock/${row.ticker}`} className="stock-cell-left">
@@ -72,10 +67,7 @@ export function StockCard({ row, watched, onToggleWatch, style }: Props) {
       </Link>
       <Link href={`/stock/${row.ticker}`} className="stock-cell-right">
         <span className="stock-price">${row.price.toFixed(2)}</span>
-        <span className={chgClass}>
-          {up ? "+" : ""}
-          {row.change_pct.toFixed(2)}%
-        </span>
+        <PriceChange pct={row.change_pct} />
       </Link>
     </div>
   );

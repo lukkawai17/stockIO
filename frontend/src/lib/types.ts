@@ -1,13 +1,17 @@
 export type Label = "買" | "持有" | "避開";
 
 export type SupportResistance = {
-  support: number;
-  resistance: number;
+  support: number | null;
+  resistance: number | null;
   pivot: number;
-  near_support: number;
-  near_resistance: number;
-  distance_to_support_pct: number;
-  distance_to_resistance_pct: number;
+  near_support: number | null;
+  near_resistance: number | null;
+  distance_to_support_pct: number | null;
+  distance_to_resistance_pct: number | null;
+  /** True when a level strictly below (support) / above (resistance) current price exists. */
+  support_valid: boolean;
+  resistance_valid: boolean;
+  note: string;
 };
 
 export type PriceLevels = {
@@ -57,6 +61,7 @@ export type StockRow = {
 export type ScanResponse = {
   mode: "short" | "long";
   status?: string;
+  message?: string;
   updated_at?: number;
   updated_at_iso?: string;
   universe_size?: number;
@@ -68,6 +73,10 @@ export type ScanResponse = {
   hold?: StockRow[];
   spy?: { price: number; change_pct: number; ret_20d?: number };
   disclaimer?: string;
+  live?: boolean;
+  score_poll_interval_ms?: number;
+  session?: string;
+  session_label?: string;
 };
 
 export type Quote = {
@@ -81,6 +90,27 @@ export type StockDetail = {
   ticker: string;
   price: number;
   change_pct: number;
+  /** Canonical quote — use this for all visible current-price displays. */
+  quote?: {
+    price: number;
+    change_pct: number;
+    as_of: number;
+    as_of_iso: string;
+    source: string;
+    source_label: string;
+    market_state: string;
+    session_label: string;
+    stale: boolean;
+    currency?: string;
+  };
+  as_of?: number;
+  as_of_iso?: string;
+  data_source?: string;
+  market?: {
+    state: string;
+    session_label: string;
+    is_open: boolean;
+  };
   snapshot: Record<string, unknown>;
   short: {
     score: number;
@@ -109,8 +139,8 @@ export type StockDetail = {
     price: { time: string; value: number }[];
     ma20: { time: string; value: number }[];
     ma50: { time: string; value: number }[];
-    support: number;
-    resistance: number;
+    support: number | null;
+    resistance: number | null;
     range: string;
   } | null;
   earnings: {
@@ -144,6 +174,7 @@ export type StockDetail = {
     flow_score: number | null;
     summary: string;
   } | null;
+  signal_disclaimer?: string;
   disclaimer?: string;
 };
 

@@ -9,8 +9,8 @@ export type ChartPayload = {
   price: ChartPoint[];
   ma20: ChartPoint[];
   ma50: ChartPoint[];
-  support: number;
-  resistance: number;
+  support: number | null;
+  resistance: number | null;
   range: string;
 };
 
@@ -44,8 +44,8 @@ function rollingMa(closes: number[], window: number): (number | null)[] {
 
 export function buildChartPayload(
   bars: BarIn[],
-  support: number,
-  resistance: number,
+  support: number | null,
+  resistance: number | null,
   keepDays = 140
 ): ChartPayload | null {
   if (bars.length < 30) return null;
@@ -57,7 +57,6 @@ export function buildChartPayload(
     })
     .filter((x): x is { time: string; close: number } => !!x);
 
-  // If dates missing, synthesize from end
   let series = dated;
   if (!series.length) {
     const today = new Date();
@@ -89,8 +88,8 @@ export function buildChartPayload(
     price,
     ma20: ma20Pts,
     ma50: ma50Pts,
-    support: Math.round(support * 100) / 100,
-    resistance: Math.round(resistance * 100) / 100,
+    support: support == null ? null : Math.round(support * 100) / 100,
+    resistance: resistance == null ? null : Math.round(resistance * 100) / 100,
     range: "6M",
   };
 }

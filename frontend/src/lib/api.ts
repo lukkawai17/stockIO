@@ -9,13 +9,27 @@ async function getJSON<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function fetchScan(mode: "short" | "long", refresh = false) {
-  const q = refresh ? "?refresh=true" : "";
-  return getJSON<ScanResponse>(`/api/scan/${mode}${q}`);
+export function fetchScan(mode: "short" | "long", opts?: { refresh?: boolean; live?: boolean }) {
+  const q = new URLSearchParams();
+  if (opts?.refresh) q.set("refresh", "true");
+  if (opts?.live) q.set("live", "1");
+  const qs = q.toString();
+  return getJSON<ScanResponse>(`/api/scan/${mode}${qs ? `?${qs}` : ""}`);
 }
 
 export function triggerRefresh(mode: "short" | "long") {
-  return getJSON<{ status: string; message?: string }>(`/api/scan/${mode}/refresh`, { method: "POST" });
+  return getJSON<{
+    status: string;
+    message?: string;
+    updated_at_iso?: string;
+    scanned?: number;
+    top?: ScanResponse["top"];
+    bullish?: ScanResponse["bullish"];
+    bearish?: ScanResponse["bearish"];
+    hold?: ScanResponse["hold"];
+    bottom?: ScanResponse["bottom"];
+    disclaimer?: string;
+  }>(`/api/scan/${mode}/refresh`, { method: "POST" });
 }
 
 export function fetchQuotes(symbols: string[], refresh = false): Promise<{
@@ -38,7 +52,14 @@ export function fetchStock(ticker: string) {
 }
 
 export function fetchMarketStatus() {
-  return getJSON<{ is_open: boolean; session: string; note?: string }>("/api/market/status");
+  return getJSON<{
+    is_open: boolean;
+    session: string;
+    session_label?: string;
+    poll_interval_ms?: number;
+    note?: string;
+    et_clock?: string;
+  }>("/api/market/status");
 }
 
 export function fetchBacktest() {

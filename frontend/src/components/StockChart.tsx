@@ -98,22 +98,26 @@ export function StockChart({ data, up }: Props) {
     }
 
     // Support / resistance horizontal lines on price series
-    priceSeries.createPriceLine({
-      price: data.support,
-      color: "#30D158",
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: "支撐",
-    });
-    priceSeries.createPriceLine({
-      price: data.resistance,
-      color: "#FF453A",
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: "阻力",
-    });
+    if (data.support != null) {
+      priceSeries.createPriceLine({
+        price: data.support,
+        color: "#30D158",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "支撐",
+      });
+    }
+    if (data.resistance != null) {
+      priceSeries.createPriceLine({
+        price: data.resistance,
+        color: "#FF453A",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "阻力",
+      });
+    }
 
     chart.timeScale().fitContent();
 

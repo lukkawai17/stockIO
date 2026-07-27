@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { fetchMarketStatus, fetchQuotes, fetchScan, triggerRefresh } from "@/lib/api";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { loadWatchlist, toggleWatch } from "@/lib/watchlist";
 import type { ScanResponse, StockRow } from "@/lib/types";
 import { StockCard } from "./StockCard";
@@ -26,36 +27,67 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [watch, setWatch] = useState<string[]>([]);
+  const [scoring, setScoring] = useState(false);
+  const [watch, setWatch] = useState<string[]>(() => loadWatchlist());
   const [isOpen, setIsOpen] = useState(false);
+  const [sessionLabel, setSessionLabel] = useState("—");
   const [quoteAt, setQuoteAt] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("buy");
+  const [pollHint, setPollHint] = useState("約 45 秒");
+  const [scoreHint, setScoreHint] = useState("約 3 分鐘");
 
-  const load = useCallback(
-    async (refresh = false) => {
-      setError(null);
-      if (refresh) setRefreshing(true);
-      else setLoading(true);
-      try {
-        const scan = await fetchScan(mode, refresh);
-        setData(scan);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "載入失敗");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+  const applyScan = useCallback((scan: ScanResponse) => {
+    setData(scan);
+  }, []);
+
+  const loadStatic = useCallback(async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const scan = await fetchScan(mode);
+      applyScan(scan);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "載入失敗");
+    } finally {
+      setLoading(false);
+    }
+  }, [mode, applyScan]);
+
+  const refreshScores = useCallback(async () => {
+    setScoring(true);
+    try {
+      const scan = await fetchScan(mode, { live: true });
+      applyScan(scan);
+      if (scan.updated_at_iso) {
+        /* score timestamp comes from scan.updated_at_iso */
       }
-    },
-    [mode]
-  );
+    } catch {
+      /* keep last scores */
+    } finally {
+      setScoring(false);
+    }
+  }, [mode, applyScan]);
 
   useEffect(() => {
-    setWatch(loadWatchlist());
-    load(false);
+    const t = window.setTimeout(() => {
+      loadStatic();
+    }, 0);
     fetchMarketStatus()
-      .then((s) => setIsOpen(s.is_open))
+      .then((s) => {
+        setIsOpen(s.is_open);
+        setSessionLabel(s.session_label || (s.is_open ? "開市中" : "已收市"));
+        if (s.poll_interval_ms) {
+          const sec = Math.round(s.poll_interval_ms / 1000);
+          setPollHint(sec < 60 ? `約 ${sec} 秒` : `約 ${Math.round(sec / 60)} 分鐘`);
+        }
+        const session = s.session || (s.is_open ? "regular" : "closed");
+        if (session === "regular") setScoreHint("約 3 分鐘");
+        else if (session === "pre" || session === "post") setScoreHint("約 5 分鐘");
+        else setScoreHint("約 15 分鐘");
+      })
       .catch(() => undefined);
-  }, [load]);
+    return () => window.clearTimeout(t);
+  }, [loadStatic]);
 
   const tickers = useMemo(() => {
     if (!data) return [] as string[];
@@ -63,39 +95,54 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
     return Array.from(new Set(all.map((r) => r.ticker)));
   }, [data]);
 
-  useEffect(() => {
+  const refreshQuotes = useCallback(async () => {
     if (!tickers.length) return;
-    let cancelled = false;
-    const refreshQuotes = async () => {
-      try {
-        const status = await fetchMarketStatus();
-        if (!cancelled) setIsOpen(status.is_open);
-        const q = await fetchQuotes(tickers, true);
-        if (cancelled) return;
-        setData((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            top: mergeQuotes(prev.top || [], q.quotes),
-            bullish: mergeQuotes(prev.bullish || [], q.quotes),
-            bearish: mergeQuotes(prev.bearish || [], q.quotes),
-            hold: mergeQuotes(prev.hold || [], q.quotes),
-            bottom: mergeQuotes(prev.bottom || [], q.quotes),
-          };
-        });
-        setQuoteAt(q.updated_at_iso || new Date().toISOString());
-      } catch {
-        /* ignore */
+    try {
+      const q = await fetchQuotes(tickers, true);
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          top: mergeQuotes(prev.top || [], q.quotes),
+          bullish: mergeQuotes(prev.bullish || [], q.quotes),
+          bearish: mergeQuotes(prev.bearish || [], q.quotes),
+          hold: mergeQuotes(prev.hold || [], q.quotes),
+          bottom: mergeQuotes(prev.bottom || [], q.quotes),
+        };
+      });
+      setQuoteAt(q.updated_at_iso || new Date().toISOString());
+    } catch {
+      /* ignore transient quote failures */
+    }
+  }, [tickers]);
+
+  useAutoRefresh(refreshQuotes, {
+    enabled: tickers.length > 0,
+    watchKey: tickers.join(","),
+    onStatus: (s) => {
+      setIsOpen(s.is_open);
+      setSessionLabel(
+        s.session_label ||
+          (s.is_open ? "開市中" : s.session === "pre" ? "盤前" : s.session === "post" ? "盤後" : "已收市")
+      );
+      if (s.poll_interval_ms) {
+        const sec = Math.round(s.poll_interval_ms / 1000);
+        setPollHint(sec < 60 ? `約 ${sec} 秒` : `約 ${Math.round(sec / 60)} 分鐘`);
       }
-    };
-    refreshQuotes();
-    const id = window.setInterval(refreshQuotes, 3 * 60 * 1000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tickers.join(",")]);
+      if (s.session === "regular") setScoreHint("約 3 分鐘");
+      else if (s.session === "pre" || s.session === "post") setScoreHint("約 5 分鐘");
+      else setScoreHint("約 15 分鐘");
+    },
+  });
+
+  // Live score refresh — own cadence (not quote 45s interval)
+  useAutoRefresh(refreshScores, {
+    enabled: !loading,
+    watchKey: mode,
+    openIntervalMs: 3 * 60_000,
+    closedIntervalMs: 15 * 60_000,
+    useStatusInterval: false,
+  });
 
   const rows = useMemo(() => {
     if (!data) return [] as StockRow[];
@@ -112,8 +159,23 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
     setRefreshing(true);
     try {
       const res = await triggerRefresh(mode);
-      await load(false);
-      alert(res.message || "分數由系統定時更新；報價會繼續自動刷新。");
+      if (res.top || res.bullish) {
+        applyScan({
+          mode,
+          status: res.status,
+          updated_at_iso: res.updated_at_iso,
+          scanned: res.scanned,
+          top: res.top || [],
+          bullish: res.bullish || [],
+          bearish: res.bearish || [],
+          hold: res.hold || [],
+          bottom: res.bottom || [],
+          disclaimer: res.disclaimer,
+        });
+      } else {
+        await refreshScores();
+      }
+      await refreshQuotes();
     } catch (e) {
       setError(e instanceof Error ? e.message : "更新失敗");
     } finally {
@@ -121,21 +183,29 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
     }
   };
 
+  const statusClass =
+    isOpen || sessionLabel === "盤前" || sessionLabel === "盤後" ? "status-dot open" : "status-dot";
+
   return (
     <section>
       <h1 className="large-title">{title}</h1>
       <p className="page-sub">{subtitle}</p>
 
       <div className="page-toolbar">
-        <span className={isOpen ? "status-dot open" : "status-dot"}>{isOpen ? "開市中" : "已收市"}</span>
-        <button type="button" className="btn btn-ghost" onClick={onRescore} disabled={refreshing}>
-          {refreshing ? "更新中" : "關於更新"}
+        <span className={statusClass}>{sessionLabel}</span>
+        <button type="button" className="btn btn-ghost" onClick={() => refreshQuotes()} disabled={!tickers.length}>
+          刷新報價
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={onRescore} disabled={refreshing || scoring}>
+          {refreshing || scoring ? "計分中" : "重計分數"}
         </button>
       </div>
 
       {(data?.updated_at_iso || quoteAt) && (
         <p className="meta-caption">
           {data?.updated_at_iso ? `分數 ${new Date(data.updated_at_iso).toLocaleString()}` : ""}
+          {data?.status === "live" || data?.status === "live_cached" ? "（即時）" : ""}
+          {scoring ? " · 重計中…" : ""}
           {quoteAt ? ` · 報價 ${new Date(quoteAt).toLocaleTimeString()}` : ""}
           {data?.scanned ? ` · ${data.scanned} 隻` : ""}
         </p>
@@ -185,7 +255,8 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
           </div>
           {data.disclaimer && <p className="group-footer">{data.disclaimer}</p>}
           <p className="group-footer">
-            報價約 3 分鐘更新；分數／限價基於最近一次全市場掃描收市數據。點開詳情可睇即時重計。
+            報價開市約每 45 秒更新（而家 {pollHint}）。分數會即時重計清單內標的（而家 {scoreHint}
+            ）；切回分頁亦會刷新。全市場掃描仍由系統定時跑。
           </p>
         </>
       )}

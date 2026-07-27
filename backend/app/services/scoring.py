@@ -50,8 +50,10 @@ def suggest_levels(snap: dict, label: str, horizon: str = "short") -> dict:
     if atr_pct is None:
         atr_pct = 2.0 if horizon == "short" else 2.5
     atr = max(p * (float(atr_pct) / 100.0), p * 0.008)
-    support = min(float(sr.get("support") or p * 0.97), p)
-    resistance = max(float(sr.get("resistance") or p * 1.03), p)
+    raw_sup = sr.get("support")
+    raw_res = sr.get("resistance")
+    support = float(raw_sup) if raw_sup is not None and float(raw_sup) < p - atr * 0.05 else p - atr * 1.5
+    resistance = float(raw_res) if raw_res is not None and float(raw_res) > p + atr * 0.05 else p + atr * 2
     if resistance - support < atr * 1.2:
         support = min(support, p - atr * 1.5)
         resistance = max(resistance, p + atr * 2)
@@ -291,17 +293,17 @@ def _pillar_volume(snap: dict, reasons: list[str]) -> float:
 def _pillar_structure(snap: dict, reasons: list[str]) -> float:
     s = 50.0
     sr = snap.get("support_resistance") or {}
-    ds = sr.get("distance_to_support_pct", 99)
-    dr = sr.get("distance_to_resistance_pct", 99)
-    if ds <= 2:
+    ds = sr.get("distance_to_support_pct")
+    dr = sr.get("distance_to_resistance_pct")
+    if ds is not None and ds <= 2:
         s += 14
         reasons.append("接近支撐（結構較佳觀察位）")
-    elif ds >= 12:
+    elif ds is not None and ds >= 12:
         s -= 4
-    if dr <= 1.5:
+    if dr is not None and dr <= 1.5:
         s -= 14
         reasons.append("貼近阻力（冲關風險）")
-    elif dr >= 8:
+    elif dr is not None and dr >= 8:
         s += 6
         reasons.append("距離阻力有空間")
     return _clamp(s)

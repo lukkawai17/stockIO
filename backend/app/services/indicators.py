@@ -29,30 +29,55 @@ def macd(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
     return line, signal, hist
 
 
-def support_resistance(high: pd.Series, low: pd.Series, close: pd.Series, lookback: int = 40) -> dict:
-    """Recent swing levels + classic pivot."""
+def support_resistance(high: pd.Series, low: pd.Series, close: pd.Series, lookback: int = 40, ref_price: float | None = None) -> dict:
+    """Classify S/R relative to current price: support below, resistance above."""
     h = high.tail(lookback)
     l = low.tail(lookback)
-    c = float(close.iloc[-1])
-    recent_high = float(h.max())
-    recent_low = float(l.min())
-    # Classic floor trader pivots from prior bar
+    last_c = float(close.iloc[-1])
+    c = float(ref_price) if ref_price is not None and ref_price > 0 else last_c
+    highs = [float(x) for x in h.dropna().tolist()]
+    lows = [float(x) for x in l.dropna().tolist()]
+    recent_high = max(highs) if highs else last_c
+    recent_low = min(lows) if lows else last_c
     prev_h = float(high.iloc[-2]) if len(high) > 1 else recent_high
     prev_l = float(low.iloc[-2]) if len(low) > 1 else recent_low
-    prev_c = float(close.iloc[-2]) if len(close) > 1 else c
+    prev_c = float(close.iloc[-2]) if len(close) > 1 else last_c
     pivot = (prev_h + prev_l + prev_c) / 3
     r1 = 2 * pivot - prev_l
     s1 = 2 * pivot - prev_h
     r2 = pivot + (prev_h - prev_l)
     s2 = pivot - (prev_h - prev_l)
+
+    eps = max(c * 0.0005, 0.01)
+    candidates = [recent_low, recent_high, s1, s2, r1, r2, pivot]
+    below = sorted([n for n in candidates if n < c - eps], reverse=True)
+    above = sorted([n for n in candidates if n > c + eps])
+    swing_below = sorted([n for n in lows if n < c - eps], reverse=True)
+    swing_above = sorted([n for n in highs if n > c + eps])
+
+    support = below[0] if below else (swing_below[0] if swing_below else None)
+    resistance = above[0] if above else (swing_above[0] if swing_above else None)
+
+    if support is None and resistance is None:
+        note = "現價附近暫無可分類嘅支撐／阻力（可能橫行或數據不足）。"
+    elif support is None:
+        note = "已跌破近期可見支撐；暫只顯示上方阻力。"
+    elif resistance is None:
+        note = "已突破近期可見阻力；暫只顯示下方支撐。"
+    else:
+        note = "支撐＝現價下方最近結構位；阻力＝現價上方最近結構位。"
+
     return {
-        "support": round(min(recent_low, s1, s2), 2),
-        "resistance": round(max(recent_high, r1, r2), 2),
+        "support": round(support, 2) if support is not None else None,
+        "resistance": round(resistance, 2) if resistance is not None else None,
         "pivot": round(pivot, 2),
-        "near_support": round(min(s1, recent_low), 2),
-        "near_resistance": round(max(r1, recent_high), 2),
-        "distance_to_support_pct": round((c - min(s1, recent_low)) / c * 100, 2) if c else 0,
-        "distance_to_resistance_pct": round((max(r1, recent_high) - c) / c * 100, 2) if c else 0,
+        "near_support": round(support, 2) if support is not None else None,
+        "near_resistance": round(resistance, 2) if resistance is not None else None,
+        "distance_to_support_pct": round((c - support) / c * 100, 2) if support is not None and c else None,
+        "distance_to_resistance_pct": round((resistance - c) / c * 100, 2) if resistance is not None and c else None,
+        "support_valid": support is not None,
+        "resistance_valid": resistance is not None,
+        "note": note,
     }
 
 

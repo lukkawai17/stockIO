@@ -3,9 +3,12 @@ name: Market Scan
 on:
   schedule:
     # Weekdays, roughly before / during / after US market (UTC)
-    - cron: "30 13 * * 1-5"
-    - cron: "30 16 * * 1-5"
-    - cron: "30 21 * * 1-5"
+    - cron: "0 14 * * 1-5"   # ~10:00 ET open
+    - cron: "0 15 * * 1-5"   # ~11:00 ET
+    - cron: "0 17 * * 1-5"   # ~13:00 ET
+    - cron: "0 19 * * 1-5"   # ~15:00 ET
+    - cron: "30 20 * * 1-5"  # ~16:30 ET after close
+    - cron: "0 12 * * 1-5"   # ~08:00 ET pre
   workflow_dispatch:
 
 permissions:

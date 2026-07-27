@@ -1,11 +1,14 @@
 export type SupportResistance = {
-  support: number;
-  resistance: number;
+  support: number | null;
+  resistance: number | null;
   pivot: number;
-  near_support: number;
-  near_resistance: number;
-  distance_to_support_pct: number;
-  distance_to_resistance_pct: number;
+  near_support: number | null;
+  near_resistance: number | null;
+  distance_to_support_pct: number | null;
+  distance_to_resistance_pct: number | null;
+  support_valid: boolean;
+  resistance_valid: boolean;
+  note: string;
 };
 
 export type Snapshot = {
@@ -122,28 +125,128 @@ function rsi(closes: number[], period = 14): number {
   return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
-function supportResistance(bars: Bar[]): SupportResistance {
+/**
+ * Re-assert S/R labels against a live quote (fixes stale scan payloads).
+ * Support must be below price; resistance above. Never swap labels blindly
+ * unless both values exist and are clearly reversed relative to each other.
+ */
+export function sanitizeSupportResistance(
+  sr: SupportResistance,
+  price: number
+): SupportResistance {
+  if (!Number.isFinite(price) || price <= 0) return sr;
+  const eps = Math.max(price * 0.0005, 0.01);
+  let support = sr.support;
+  let resistance = sr.resistance;
+  if (support != null && resistance != null && support > resistance) {
+    const a = support;
+    support = resistance;
+    resistance = a;
+  }
+  if (support != null && support >= price - eps) support = null;
+  if (resistance != null && resistance <= price + eps) resistance = null;
+
+  let note = sr.note || "支撐＝現價下方最近結構位；阻力＝現價上方最近結構位。";
+  if (support == null && resistance == null) {
+    note = "現價附近暫無可分類嘅支撐／阻力。";
+  } else if (support == null) {
+    note = "已跌破近期可見支撐；暫只顯示上方阻力。";
+  } else if (resistance == null) {
+    note = "已突破近期可見阻力；暫只顯示下方支撐。";
+  }
+
+  return {
+    ...sr,
+    support: support == null ? null : round(support),
+    resistance: resistance == null ? null : round(resistance),
+    near_support: support == null ? null : round(support),
+    near_resistance: resistance == null ? null : round(resistance),
+    distance_to_support_pct:
+      support == null ? null : round(((price - support) / price) * 100),
+    distance_to_resistance_pct:
+      resistance == null ? null : round(((resistance - price) / price) * 100),
+    support_valid: support != null,
+    resistance_valid: resistance != null,
+    note,
+  };
+}
+
+export function computeSupportResistance(
+  bars: Bar[],
+  refPrice?: number | null
+): SupportResistance {
+  if (!bars.length) {
+    return {
+      support: null,
+      resistance: null,
+      pivot: 0,
+      near_support: null,
+      near_resistance: null,
+      distance_to_support_pct: null,
+      distance_to_resistance_pct: null,
+      support_valid: false,
+      resistance_valid: false,
+      note: "數據不足，暫無支撐／阻力。",
+    };
+  }
+
   const look = bars.slice(-40);
-  const highs = look.map((b) => b.high);
-  const lows = look.map((b) => b.low);
-  const recentHigh = Math.max(...highs);
-  const recentLow = Math.min(...lows);
+  const highs = look.map((b) => b.high).filter((n) => Number.isFinite(n));
+  const lows = look.map((b) => b.low).filter((n) => Number.isFinite(n));
   const prev = bars[bars.length - 2] || bars[bars.length - 1];
-  const c = bars[bars.length - 1].close;
+  const lastClose = bars[bars.length - 1].close;
+  const c = refPrice != null && Number.isFinite(refPrice) && refPrice > 0 ? refPrice : lastClose;
+
+  const recentHigh = highs.length ? Math.max(...highs) : lastClose;
+  const recentLow = lows.length ? Math.min(...lows) : lastClose;
   const pivot = (prev.high + prev.low + prev.close) / 3;
   const r1 = 2 * pivot - prev.low;
   const s1 = 2 * pivot - prev.high;
   const r2 = pivot + (prev.high - prev.low);
   const s2 = pivot - (prev.high - prev.low);
+
+  const eps = Math.max(c * 0.0005, 0.01); // ignore levels essentially equal to price
+  const candidates = [recentLow, recentHigh, s1, s2, r1, r2, pivot].filter((n) => Number.isFinite(n));
+
+  // Prefer nearest below / nearest above (not raw min/max of mixed candidates)
+  const below = candidates.filter((n) => n < c - eps).sort((a, b) => b - a);
+  const above = candidates.filter((n) => n > c + eps).sort((a, b) => a - b);
+
+  // Fallback: any swing low/high from lookback window
+  const swingBelow = lows.filter((n) => n < c - eps).sort((a, b) => b - a);
+  const swingAbove = highs.filter((n) => n > c + eps).sort((a, b) => a - b);
+
+  const support = below[0] ?? swingBelow[0] ?? null;
+  const resistance = above[0] ?? swingAbove[0] ?? null;
+
+  let note = "支撐＝現價下方最近結構位；阻力＝現價上方最近結構位。";
+  if (support == null && resistance == null) {
+    note = "現價附近暫無可分類嘅支撐／阻力（可能橫行或數據不足）。";
+  } else if (support == null) {
+    note = "已跌破近期可見支撐；暫只顯示上方阻力。";
+  } else if (resistance == null) {
+    note = "已突破近期可見阻力；暫只顯示下方支撐。";
+  }
+
   return {
-    support: round(Math.min(recentLow, s1, s2)),
-    resistance: round(Math.max(recentHigh, r1, r2)),
+    support: support == null ? null : round(support),
+    resistance: resistance == null ? null : round(resistance),
     pivot: round(pivot),
-    near_support: round(Math.min(s1, recentLow)),
-    near_resistance: round(Math.max(r1, recentHigh)),
-    distance_to_support_pct: round(((c - Math.min(s1, recentLow)) / c) * 100),
-    distance_to_resistance_pct: round(((Math.max(r1, recentHigh) - c) / c) * 100),
+    near_support: support == null ? null : round(support),
+    near_resistance: resistance == null ? null : round(resistance),
+    distance_to_support_pct:
+      support == null || !c ? null : round(((c - support) / c) * 100),
+    distance_to_resistance_pct:
+      resistance == null || !c ? null : round(((resistance - c) / c) * 100),
+    support_valid: support != null,
+    resistance_valid: resistance != null,
+    note,
   };
+}
+
+/** @deprecated use computeSupportResistance — kept as private helper name during migration */
+function supportResistance(bars: Bar[], refPrice?: number | null): SupportResistance {
+  return computeSupportResistance(bars, refPrice);
 }
 
 function round(n: number, d = 2) {
@@ -205,6 +308,21 @@ export function enrichRowLevels(
 ) {
   const sr = row.support_resistance;
   if (!sr) return row;
+  const sanitized = sanitizeSupportResistance(
+    {
+      support: sr.support ?? null,
+      resistance: sr.resistance ?? null,
+      pivot: sr.pivot ?? row.price,
+      near_support: sr.near_support ?? null,
+      near_resistance: sr.near_resistance ?? null,
+      distance_to_support_pct: sr.distance_to_support_pct ?? null,
+      distance_to_resistance_pct: sr.distance_to_resistance_pct ?? null,
+      support_valid: sr.support_valid ?? sr.support != null,
+      resistance_valid: sr.resistance_valid ?? sr.resistance != null,
+      note: sr.note ?? "",
+    },
+    row.price
+  );
   const snap: Snapshot = {
     price: row.price,
     change_pct: 0,
@@ -226,7 +344,7 @@ export function enrichRowLevels(
     ma_stack_bear: false,
     golden_bias: false,
     death_bias: false,
-    support_resistance: sr,
+    support_resistance: sanitized,
     above_ma20: row.price > (row.ma20 ?? row.price),
     above_ma50: row.price > (row.ma50 ?? row.price),
     above_ma200: row.ma200 == null ? null : row.price > row.ma200,
@@ -234,6 +352,7 @@ export function enrichRowLevels(
   const levels = suggestLevels(snap, row.label, horizon);
   return {
     ...row,
+    support_resistance: sanitized,
     levels,
     buy_price: levels.buy,
     sell_price: levels.sell,
@@ -260,8 +379,10 @@ export function suggestLevels(
   const sr = snap.support_resistance;
   const atrPct = snap.atr_pct ?? (horizon === "short" ? 2 : 2.5);
   const atr = Math.max(p * (atrPct / 100), p * 0.008);
-  let support = Math.min(sr.support, p);
-  let resistance = Math.max(sr.resistance, p);
+  let support =
+    sr.support != null && sr.support < p - atr * 0.05 ? sr.support : p - atr * 1.5;
+  let resistance =
+    sr.resistance != null && sr.resistance > p + atr * 0.05 ? sr.resistance : p + atr * 2;
   // Ensure usable range
   if (resistance - support < atr * 1.2) {
     support = Math.min(support, p - atr * 1.5);
@@ -297,9 +418,6 @@ export function suggestLevels(
   stop = Math.min(stop, p - atr * 1.2); // never tiny stop vs current chase
 
   // --- Ideal pullback / confluence buy zone (discount half of range) ---
-  // Fib-style: 38.2%–61.8% retracement from resistance down toward support
-  // = price levels from support + 0.382*range … support + 0.618*range for "mid"
-  // For longs we want the LOWER band: support → ~50% of range (discount).
   const fib382 = support + range * 0.382;
   const fib50 = support + range * 0.5;
   const discountCap = support + range * 0.45; // stay in lower ~half
@@ -323,7 +441,10 @@ export function suggestLevels(
     buyHigh = buyLow + atr * 0.8;
   }
   // Cap buy zone strictly below current when in premium — force pullback
-  const inPremium = rangePos >= 0.55 || snap.rsi >= 68 || sr.distance_to_resistance_pct <= 2.5;
+  const inPremium =
+    rangePos >= 0.55 ||
+    snap.rsi >= 68 ||
+    (sr.distance_to_resistance_pct != null && sr.distance_to_resistance_pct <= 2.5);
   const inDiscount = rangePos <= 0.42 && snap.rsi <= 60;
 
   if (inPremium || label === "持有") {
@@ -421,7 +542,10 @@ export function suggestLevels(
   };
 }
 
-export function computeSnapshot(bars: Bar[]): Snapshot | null {
+export function computeSnapshot(
+  bars: Bar[],
+  opts?: { refPrice?: number | null; changePct?: number | null }
+): Snapshot | null {
   if (bars.length < 30) return null;
   const closes = bars.map((b) => b.close);
   const highs = bars.map((b) => b.high);
@@ -429,7 +553,16 @@ export function computeSnapshot(bars: Bar[]): Snapshot | null {
   const volumes = bars.map((b) => b.volume);
   const last = closes[closes.length - 1];
   const prev = closes[closes.length - 2] || last;
-  const changePct = prev ? ((last - prev) / prev) * 100 : 0;
+  const price =
+    opts?.refPrice != null && Number.isFinite(opts.refPrice) && opts.refPrice > 0
+      ? opts.refPrice
+      : last;
+  const changePct =
+    opts?.changePct != null && Number.isFinite(opts.changePct)
+      ? opts.changePct
+      : prev
+        ? ((last - prev) / prev) * 100
+        : 0;
   const ma20 = sma(closes, 20) ?? last;
   const ma50 = sma(closes, 50) ?? last;
   const ma200 = sma(closes, 200);
@@ -459,14 +592,14 @@ export function computeSnapshot(bars: Bar[]): Snapshot | null {
     atrSum += tr;
     atrN++;
   }
-  const atrPct = atrN ? round((atrSum / atrN / last) * 100) : null;
+  const atrPct = atrN ? round((atrSum / atrN / price) * 100) : null;
   const high52 = Math.max(...highs.slice(-Math.min(252, highs.length)));
-  const dist52 = high52 ? round(((high52 - last) / high52) * 100) : null;
+  const dist52 = high52 ? round(((high52 - price) / high52) * 100) : null;
   const peak20 = Math.max(...closes.slice(-21));
-  const dd20 = peak20 ? round(((last - peak20) / peak20) * 100) : 0;
+  const dd20 = peak20 ? round(((price - peak20) / peak20) * 100) : 0;
 
   return {
-    price: round(last),
+    price: round(price),
     change_pct: round(changePct),
     ma20: round(ma20),
     ma50: round(ma50),
@@ -482,14 +615,14 @@ export function computeSnapshot(bars: Bar[]): Snapshot | null {
     atr_pct: atrPct,
     dist_52w_high_pct: dist52,
     drawdown_20d_pct: dd20,
-    ma_stack_bull: last > ma20 && ma20 > ma50,
-    ma_stack_bear: last < ma20 && ma20 < ma50,
+    ma_stack_bull: price > ma20 && ma20 > ma50,
+    ma_stack_bear: price < ma20 && ma20 < ma50,
     golden_bias: ma200 != null && ma50 > ma200,
     death_bias: ma200 != null && ma50 < ma200,
-    support_resistance: supportResistance(bars),
-    above_ma20: last > ma20,
-    above_ma50: last > ma50,
-    above_ma200: ma200 == null ? null : last > ma200,
+    support_resistance: supportResistance(bars, price),
+    above_ma20: price > ma20,
+    above_ma50: price > ma50,
+    above_ma200: ma200 == null ? null : price > ma200,
   };
 }
 
@@ -590,16 +723,16 @@ export function scoreShort(snap: Snapshot): ScoreResult {
   let structure = 50;
   const ds = snap.support_resistance.distance_to_support_pct;
   const dr = snap.support_resistance.distance_to_resistance_pct;
-  if (ds <= 2) {
+  if (ds != null && ds <= 2) {
     structure += 14;
     reasons.push("接近支撐（結構較佳觀察位）");
-  } else if (ds >= 12) {
+  } else if (ds != null && ds >= 12) {
     structure -= 4;
   }
-  if (dr <= 1.5) {
+  if (dr != null && dr <= 1.5) {
     structure -= 14;
     reasons.push("貼近阻力（冲關風險）");
-  } else if (dr >= 8) {
+  } else if (dr != null && dr >= 8) {
     structure += 6;
     reasons.push("距離阻力有空間");
   }

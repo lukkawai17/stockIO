@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { fetchQuotes, fetchStock } from "@/lib/api";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { exportWatchlist, importWatchlist, loadWatchlist, saveWatchlist, toggleWatch } from "@/lib/watchlist";
 import { LabelBadge } from "@/components/LabelBadge";
+import { PriceChange } from "@/components/PriceChange";
 import type { Label } from "@/lib/types";
 
 type Row = {
@@ -19,75 +21,98 @@ type Row = {
 };
 
 export default function WatchlistPage() {
-  const [tickers, setTickers] = useState<string[]>([]);
+  const [tickers, setTickers] = useState<string[]>(() => loadWatchlist());
   const [rows, setRows] = useState<Row[]>([]);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [quoteAt, setQuoteAt] = useState<string | null>(null);
+  const rowsReady = useRef(false);
+  const tickersKey = tickers.join(",");
 
-  useEffect(() => {
-    setTickers(loadWatchlist());
-  }, []);
-
-  useEffect(() => {
+  const loadFull = useCallback(async () => {
     if (!tickers.length) {
       setRows([]);
+      rowsReady.current = false;
       return;
     }
-    let cancelled = false;
-    const run = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const quotes = await fetchQuotes(tickers, true);
-        const details = await Promise.all(
-          tickers.map(async (t) => {
-            try {
-              const d = await fetchStock(t);
-              return {
-                ticker: t,
-                price: quotes.quotes[t]?.price ?? d.price,
-                change_pct: quotes.quotes[t]?.change_pct ?? d.change_pct,
-                shortLabel: d.short.label,
-                shortScore: d.short.score,
-                longLabel: d.long.label,
-                longScore: d.long.score,
-                reason: d.short.reason,
-              } as Row;
-            } catch {
-              const q = quotes.quotes[t];
-              return {
-                ticker: t,
-                price: q?.price ?? 0,
-                change_pct: q?.change_pct ?? 0,
-              } as Row;
-            }
-          })
-        );
-        if (!cancelled) setRows(details);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "載入失敗");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    run();
-    const id = window.setInterval(run, 3 * 60 * 1000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [tickers.join(",")]);
+    setLoading(true);
+    setError(null);
+    try {
+      const quotes = await fetchQuotes(tickers, true);
+      setQuoteAt(quotes.updated_at_iso || new Date().toISOString());
+      const details = await Promise.all(
+        tickers.map(async (t) => {
+          try {
+            const d = await fetchStock(t);
+            return {
+              ticker: t,
+              price: quotes.quotes[t]?.price ?? d.quote?.price ?? d.price,
+              change_pct: quotes.quotes[t]?.change_pct ?? d.quote?.change_pct ?? d.change_pct,
+              shortLabel: d.short.label,
+              shortScore: d.short.score,
+              longLabel: d.long.label,
+              longScore: d.long.score,
+              reason: d.short.reason,
+            } as Row;
+          } catch {
+            const q = quotes.quotes[t];
+            return {
+              ticker: t,
+              price: q?.price ?? 0,
+              change_pct: q?.change_pct ?? 0,
+            } as Row;
+          }
+        })
+      );
+      setRows(details);
+      rowsReady.current = true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "載入失敗");
+    } finally {
+      setLoading(false);
+    }
+  }, [tickers]);
 
-  const exportJson = useMemo(() => exportWatchlist(), [tickers.join(",")]);
+  const refreshQuotesOnly = useCallback(async () => {
+    if (!tickers.length) return;
+    if (!rowsReady.current) {
+      await loadFull();
+      return;
+    }
+    try {
+      const quotes = await fetchQuotes(tickers, true);
+      setQuoteAt(quotes.updated_at_iso || new Date().toISOString());
+      setRows((prev) =>
+        prev
+          .filter((r) => tickers.includes(r.ticker))
+          .map((r) => {
+            const q = quotes.quotes[r.ticker];
+            return q ? { ...r, price: q.price, change_pct: q.change_pct } : r;
+          })
+      );
+    } catch {
+      /* keep last rows */
+    }
+  }, [tickers, loadFull]);
+
+  useAutoRefresh(refreshQuotesOnly, { enabled: tickers.length > 0, watchKey: tickersKey });
+
+  const exportJson = useMemo(() => {
+    void tickers;
+    return exportWatchlist();
+  }, [tickers]);
 
   return (
     <section>
       <h1 className="large-title">關注</h1>
-      <p className="page-sub">清單保存在呢部裝置。顯示短線＋長線建議。</p>
+      <p className="page-sub">清單保存在呢部裝置。顯示短線＋長線建議。開市時報價會自動刷新。</p>
 
       <div className="toolbar-row">
+        <button type="button" className="btn btn-ghost" onClick={() => loadFull()}>
+          刷新
+        </button>
         <button
           type="button"
           className="btn btn-ghost"
@@ -110,6 +135,8 @@ export default function WatchlistPage() {
           </button>
         )}
       </div>
+
+      {quoteAt && <p className="meta-caption">報價 {new Date(quoteAt).toLocaleTimeString()}</p>}
 
       {showImport && (
         <>
@@ -152,53 +179,49 @@ export default function WatchlistPage() {
         <>
           <p className="group-header">{tickers.length} 隻股票</p>
           <div className="group">
-            {rows.map((r) => {
-              const up = r.change_pct > 0;
-              const down = r.change_pct < 0;
-              const chgClass = up ? "chg up" : down ? "chg down" : "chg flat";
-              return (
-                <div key={r.ticker} className="stock-cell">
-                  <Link href={`/stock/${r.ticker}`} className="stock-cell-left">
-                    <span className="stock-symbol">{r.ticker}</span>
-                    <div className="row-meta">
-                      {r.shortLabel && (
-                        <>
-                          <span className="meta-caption">短</span>
-                          <LabelBadge label={r.shortLabel} />
-                          {r.shortScore != null && <span className="score-chip">{r.shortScore.toFixed(0)}</span>}
-                        </>
-                      )}
-                      {r.longLabel && (
-                        <>
-                          <span className="meta-caption">長</span>
-                          <LabelBadge label={r.longLabel} />
-                          {r.longScore != null && <span className="score-chip">{r.longScore.toFixed(0)}</span>}
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        className="star-btn on"
-                        aria-label="移除關注"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setTickers(toggleWatch(r.ticker));
-                        }}
-                      >
-                        ★
-                      </button>
-                    </div>
-                    {r.reason && <p className="stock-reason">{r.reason}</p>}
-                  </Link>
-                  <Link href={`/stock/${r.ticker}`} className="stock-cell-right">
-                    <span className="stock-price">${r.price.toFixed(2)}</span>
-                    <span className={chgClass}>
-                      {up ? "+" : ""}
-                      {r.change_pct.toFixed(2)}%
-                    </span>
-                  </Link>
-                </div>
-              );
-            })}
+            {rows.map((r) => (
+              <div key={r.ticker} className="stock-cell">
+                <Link href={`/stock/${r.ticker}`} className="stock-cell-left">
+                  <span className="stock-symbol">{r.ticker}</span>
+                  <div className="row-meta">
+                    {r.shortLabel && (
+                      <>
+                        <span className="meta-caption">短</span>
+                        <LabelBadge label={r.shortLabel} />
+                        {r.shortScore != null && (
+                          <span className="score-chip">{r.shortScore.toFixed(0)}</span>
+                        )}
+                      </>
+                    )}
+                    {r.longLabel && (
+                      <>
+                        <span className="meta-caption">長</span>
+                        <LabelBadge label={r.longLabel} />
+                        {r.longScore != null && (
+                          <span className="score-chip">{r.longScore.toFixed(0)}</span>
+                        )}
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      className="star-btn on"
+                      aria-label="移除關注"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setTickers(toggleWatch(r.ticker));
+                      }}
+                    >
+                      ★
+                    </button>
+                  </div>
+                  {r.reason && <p className="stock-reason">{r.reason}</p>}
+                </Link>
+                <Link href={`/stock/${r.ticker}`} className="stock-cell-right">
+                  <span className="stock-price">${r.price.toFixed(2)}</span>
+                  <PriceChange pct={r.change_pct} />
+                </Link>
+              </div>
+            ))}
           </div>
         </>
       )}
