@@ -63,6 +63,27 @@ describe("computeSupportResistance", () => {
     if (atPrice.resistance != null) expect(atPrice.resistance).toBeGreaterThan(last + 0.01);
   });
 
+  it("rejects near-price noise (sub-0.5% fake levels)", () => {
+    // Construct bars with a clear swing low far below and a tiny spike high near price
+    const closes = Array.from({ length: 50 }, (_, i) => 100 + i * 0.2);
+    const bars = closes.map((c, i) => ({
+      high: c + (i === 48 ? 0.2 : 1.5),
+      low: c - (i === 30 ? 8 : 1.2), // deep swing low around bar 30
+      close: c,
+      volume: 1e6,
+    }));
+    const price = bars[bars.length - 1].close;
+    const sr = computeSupportResistance(bars, price);
+    if (sr.support != null) {
+      expect((price - sr.support) / price).toBeGreaterThanOrEqual(0.006);
+      expect(sr.support).toBeLessThan(price);
+    }
+    if (sr.resistance != null) {
+      expect((sr.resistance - price) / price).toBeGreaterThanOrEqual(0.006);
+      expect(sr.resistance).toBeGreaterThan(price);
+    }
+  });
+
   it("returns null levels and a note when no valid S/R exists", () => {
     // Flat bars: all highs/lows collapse near the same price → hard to find sides
     const flat = makeBars(Array.from({ length: 40 }, () => 50));

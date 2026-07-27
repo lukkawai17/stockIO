@@ -29,18 +29,36 @@ def macd(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
     return line, signal, hist
 
 
-def support_resistance(high: pd.Series, low: pd.Series, close: pd.Series, lookback: int = 40, ref_price: float | None = None) -> dict:
-    """Classify S/R relative to current price: support below, resistance above."""
+def support_resistance(high: pd.Series, low: pd.Series, close: pd.Series, lookback: int = 60, ref_price: float | None = None) -> dict:
+    """Structural S/R: swing pivots + floor pivots, filtered away from sticker noise."""
     h = high.tail(lookback)
     l = low.tail(lookback)
     last_c = float(close.iloc[-1])
     c = float(ref_price) if ref_price is not None and ref_price > 0 else last_c
     highs = [float(x) for x in h.dropna().tolist()]
     lows = [float(x) for x in l.dropna().tolist()]
-    recent_high = max(highs) if highs else last_c
-    recent_low = min(lows) if lows else last_c
-    prev_h = float(high.iloc[-2]) if len(high) > 1 else recent_high
-    prev_l = float(low.iloc[-2]) if len(low) > 1 else recent_low
+
+    # ATR(14) approx for min gap
+    atr = 0.0
+    if len(close) > 2:
+        n = min(14, len(close) - 1)
+        trs = []
+        for i in range(len(close) - n, len(close)):
+            if i <= 0:
+                continue
+            tr = max(
+                float(high.iloc[i] - low.iloc[i]),
+                abs(float(high.iloc[i] - close.iloc[i - 1])),
+                abs(float(low.iloc[i] - close.iloc[i - 1])),
+            )
+            trs.append(tr)
+        atr = sum(trs) / len(trs) if trs else 0.0
+
+    min_gap = max(c * 0.008, atr * 0.5, 0.05)
+    cluster_tol = max(c * 0.004, atr * 0.25)
+
+    prev_h = float(high.iloc[-2]) if len(high) > 1 else (max(highs) if highs else last_c)
+    prev_l = float(low.iloc[-2]) if len(low) > 1 else (min(lows) if lows else last_c)
     prev_c = float(close.iloc[-2]) if len(close) > 1 else last_c
     pivot = (prev_h + prev_l + prev_c) / 3
     r1 = 2 * pivot - prev_l
@@ -48,24 +66,54 @@ def support_resistance(high: pd.Series, low: pd.Series, close: pd.Series, lookba
     r2 = pivot + (prev_h - prev_l)
     s2 = pivot - (prev_h - prev_l)
 
-    eps = max(c * 0.0005, 0.01)
-    candidates = [recent_low, recent_high, s1, s2, r1, r2, pivot]
-    below = sorted([n for n in candidates if n < c - eps], reverse=True)
-    above = sorted([n for n in candidates if n > c + eps])
-    swing_below = sorted([n for n in lows if n < c - eps], reverse=True)
-    swing_above = sorted([n for n in highs if n > c + eps])
+    def swings(vals: list[float], mode: str, radius: int = 2) -> list[float]:
+        out: list[float] = []
+        for i in range(radius, len(vals) - radius):
+            v = vals[i]
+            window = vals[i - radius : i + radius + 1]
+            if mode == "low" and v == min(window):
+                out.append(v)
+            if mode == "high" and v == max(window):
+                out.append(v)
+        return out
 
-    support = below[0] if below else (swing_below[0] if swing_below else None)
-    resistance = above[0] if above else (swing_above[0] if swing_above else None)
+    def cluster(levels: list[float]) -> list[float]:
+        if not levels:
+            return []
+        levels = sorted(levels)
+        groups: list[list[float]] = [[levels[0]]]
+        for x in levels[1:]:
+            if x - groups[-1][0] <= cluster_tol:
+                groups[-1].append(x)
+            else:
+                groups.append([x])
+        return [sum(g) / len(g) for g in groups]
+
+    high20 = float(high.tail(20).max()) if len(high) else last_c
+    low20 = float(low.tail(20).min()) if len(low) else last_c
+    high60 = max(highs) if highs else last_c
+    low60 = min(lows) if lows else last_c
+
+    below = sorted(
+        [n for n in cluster(swings(lows, "low") + [s1, s2, pivot, low20, low60]) if n < c - min_gap],
+        reverse=True,
+    )
+    above = sorted(
+        [n for n in cluster(swings(highs, "high") + [r1, r2, pivot, high20, high60]) if n > c + min_gap]
+    )
+
+    max_dist = c * 0.18
+    support = next((n for n in below if c - n <= max_dist), None)
+    resistance = next((n for n in above if n - c <= max_dist), None)
 
     if support is None and resistance is None:
-        note = "現價附近暫無可分類嘅支撐／阻力（可能橫行或數據不足）。"
+        note = "現價附近暫無清晰結構位（可能剛突破、貼近區間端或橫行）。"
     elif support is None:
-        note = "已跌破近期可見支撐；暫只顯示上方阻力。"
+        note = "下方暫無足夠距離嘅支撐結構；暫只顯示上方阻力。"
     elif resistance is None:
-        note = "已突破近期可見阻力；暫只顯示下方支撐。"
+        note = "上方暫無足夠距離嘅阻力結構（常見於接近區間高位）；暫只顯示下方支撐。"
     else:
-        note = "支撐＝現價下方最近結構位；阻力＝現價上方最近結構位。"
+        note = "支撐／阻力＝近期擺動高低＋樞軸（已過濾貼價噪音）。"
 
     return {
         "support": round(support, 2) if support is not None else None,

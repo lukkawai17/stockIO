@@ -244,8 +244,9 @@ export default function LearnPage() {
       </p>
       <article className="learn-card">
         <p>
-          支撐＝下跌較易停住嘅區域；阻力＝上升較易受阻嘅區域。stockIO 用近期高低 +
-          樞軸估算。圖上綠虛線支撐、紅虛線阻力。
+          支撐＝下跌較易停住嘅區域；阻力＝上升較易受阻嘅區域。stockIO 用近期<strong>擺動高低</strong>＋
+          樞軸估算，並過濾貼近現價嘅噪音（唔會把 0.1% 距離當結構位）。圖上綠虛線支撐、紅虛線阻力。
+          接近區間高／低時某一邊可能暫時空白。
         </p>
         <ul className="learn-list">
           <li>偏多 + 近支撐：較佳試倉區（仍要預設止蝕）</li>

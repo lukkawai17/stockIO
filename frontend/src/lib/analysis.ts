@@ -127,15 +127,14 @@ function rsi(closes: number[], period = 14): number {
 
 /**
  * Re-assert S/R labels against a live quote (fixes stale scan payloads).
- * Support must be below price; resistance above. Never swap labels blindly
- * unless both values exist and are clearly reversed relative to each other.
+ * Support must be below price; resistance above. Drop near-price noise (<~0.6%).
  */
 export function sanitizeSupportResistance(
   sr: SupportResistance,
   price: number
 ): SupportResistance {
   if (!Number.isFinite(price) || price <= 0) return sr;
-  const eps = Math.max(price * 0.0005, 0.01);
+  const minGap = Math.max(price * 0.006, 0.05);
   let support = sr.support;
   let resistance = sr.resistance;
   if (support != null && resistance != null && support > resistance) {
@@ -143,16 +142,16 @@ export function sanitizeSupportResistance(
     support = resistance;
     resistance = a;
   }
-  if (support != null && support >= price - eps) support = null;
-  if (resistance != null && resistance <= price + eps) resistance = null;
+  if (support != null && support >= price - minGap) support = null;
+  if (resistance != null && resistance <= price + minGap) resistance = null;
 
-  let note = sr.note || "支撐＝現價下方最近結構位；阻力＝現價上方最近結構位。";
+  let note = sr.note || "支撐／阻力為近期擺動結構位（已過濾貼價噪音）。";
   if (support == null && resistance == null) {
-    note = "現價附近暫無可分類嘅支撐／阻力。";
+    note = "現價附近暫無清晰結構位（可能剛突破或橫行）。";
   } else if (support == null) {
-    note = "已跌破近期可見支撐；暫只顯示上方阻力。";
+    note = "下方暫無足夠距離嘅支撐結構；暫只顯示上方阻力。";
   } else if (resistance == null) {
-    note = "已突破近期可見阻力；暫只顯示下方支撐。";
+    note = "上方暫無足夠距離嘅阻力結構；暫只顯示下方支撐。";
   }
 
   return {
@@ -171,6 +170,63 @@ export function sanitizeSupportResistance(
   };
 }
 
+/** Local swing low/high: extreme vs `radius` bars on each side. */
+function swingPoints(values: number[], radius: number, mode: "low" | "high"): number[] {
+  const out: number[] = [];
+  for (let i = radius; i < values.length - radius; i++) {
+    const v = values[i];
+    let ok = true;
+    for (let j = i - radius; j <= i + radius; j++) {
+      if (j === i) continue;
+      if (mode === "low" && values[j] < v) {
+        ok = false;
+        break;
+      }
+      if (mode === "high" && values[j] > v) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) out.push(v);
+  }
+  return out;
+}
+
+function atrApprox(bars: Bar[], period = 14): number {
+  if (bars.length < 2) return 0;
+  const start = Math.max(1, bars.length - period);
+  let sum = 0;
+  let n = 0;
+  for (let i = start; i < bars.length; i++) {
+    const tr = Math.max(
+      bars[i].high - bars[i].low,
+      Math.abs(bars[i].high - bars[i - 1].close),
+      Math.abs(bars[i].low - bars[i - 1].close)
+    );
+    sum += tr;
+    n++;
+  }
+  return n ? sum / n : 0;
+}
+
+/** Merge levels within `tol` into cluster means (reduces duplicate pivots). */
+function clusterLevels(levels: number[], tol: number): number[] {
+  if (!levels.length) return [];
+  const sorted = [...levels].sort((a, b) => a - b);
+  const clusters: number[][] = [[sorted[0]]];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = clusters[clusters.length - 1];
+    if (sorted[i] - last[0] <= tol) last.push(sorted[i]);
+    else clusters.push([sorted[i]]);
+  }
+  return clusters.map((c) => c.reduce((a, b) => a + b, 0) / c.length);
+}
+
+/**
+ * Structural support/resistance (not sticker-price noise).
+ * Swing lows/highs + floor pivots + 20d/60d range extremes.
+ * Levels must sit ≥ max(0.8% price, 0.5×ATR) from the quote; pick nearest each side.
+ */
 export function computeSupportResistance(
   bars: Bar[],
   refPrice?: number | null
@@ -190,42 +246,53 @@ export function computeSupportResistance(
     };
   }
 
-  const look = bars.slice(-40);
+  const look = bars.slice(-60);
   const highs = look.map((b) => b.high).filter((n) => Number.isFinite(n));
   const lows = look.map((b) => b.low).filter((n) => Number.isFinite(n));
   const prev = bars[bars.length - 2] || bars[bars.length - 1];
   const lastClose = bars[bars.length - 1].close;
   const c = refPrice != null && Number.isFinite(refPrice) && refPrice > 0 ? refPrice : lastClose;
 
-  const recentHigh = highs.length ? Math.max(...highs) : lastClose;
-  const recentLow = lows.length ? Math.min(...lows) : lastClose;
+  const atr = atrApprox(bars, 14);
+  const minGap = Math.max(c * 0.008, atr * 0.5, 0.05);
+  const clusterTol = Math.max(c * 0.004, atr * 0.25);
+
   const pivot = (prev.high + prev.low + prev.close) / 3;
   const r1 = 2 * pivot - prev.low;
   const s1 = 2 * pivot - prev.high;
   const r2 = pivot + (prev.high - prev.low);
   const s2 = pivot - (prev.high - prev.low);
 
-  const eps = Math.max(c * 0.0005, 0.01); // ignore levels essentially equal to price
-  const candidates = [recentLow, recentHigh, s1, s2, r1, r2, pivot].filter((n) => Number.isFinite(n));
+  const look20 = bars.slice(-20);
+  const high20 = look20.length ? Math.max(...look20.map((b) => b.high)) : lastClose;
+  const low20 = look20.length ? Math.min(...look20.map((b) => b.low)) : lastClose;
+  const high60 = highs.length ? Math.max(...highs) : lastClose;
+  const low60 = lows.length ? Math.min(...lows) : lastClose;
 
-  // Prefer nearest below / nearest above (not raw min/max of mixed candidates)
-  const below = candidates.filter((n) => n < c - eps).sort((a, b) => b - a);
-  const above = candidates.filter((n) => n > c + eps).sort((a, b) => a - b);
+  const swingLows = swingPoints(lows, 2, "low");
+  const swingHighs = swingPoints(highs, 2, "high");
 
-  // Fallback: any swing low/high from lookback window
-  const swingBelow = lows.filter((n) => n < c - eps).sort((a, b) => b - a);
-  const swingAbove = highs.filter((n) => n > c + eps).sort((a, b) => a - b);
+  const rawBelow = clusterLevels(
+    [...swingLows, s1, s2, pivot, low20, low60].filter((n) => Number.isFinite(n) && n < c - minGap),
+    clusterTol
+  ).sort((a, b) => b - a);
 
-  const support = below[0] ?? swingBelow[0] ?? null;
-  const resistance = above[0] ?? swingAbove[0] ?? null;
+  const rawAbove = clusterLevels(
+    [...swingHighs, r1, r2, pivot, high20, high60].filter((n) => Number.isFinite(n) && n > c + minGap),
+    clusterTol
+  ).sort((a, b) => a - b);
 
-  let note = "支撐＝現價下方最近結構位；阻力＝現價上方最近結構位。";
+  const maxDist = c * 0.18;
+  const support = rawBelow.find((n) => c - n <= maxDist) ?? null;
+  const resistance = rawAbove.find((n) => n - c <= maxDist) ?? null;
+
+  let note = "支撐／阻力＝近期擺動高低＋樞軸（已過濾貼價 <~0.8%／0.5ATR 噪音）。";
   if (support == null && resistance == null) {
-    note = "現價附近暫無可分類嘅支撐／阻力（可能橫行或數據不足）。";
+    note = "現價附近暫無清晰結構位（可能剛突破、貼近區間端或橫行）。";
   } else if (support == null) {
-    note = "已跌破近期可見支撐；暫只顯示上方阻力。";
+    note = "下方暫無足夠距離嘅支撐結構；暫只顯示上方阻力。";
   } else if (resistance == null) {
-    note = "已突破近期可見阻力；暫只顯示下方支撐。";
+    note = "上方暫無足夠距離嘅阻力結構（常見於接近區間高位）；暫只顯示下方支撐。";
   }
 
   return {

@@ -585,7 +585,8 @@ export default function StockDetailPage() {
         <div className="inset-row">
           <dt>
             <InfoTip label="支撐">
-              現價<strong>下方</strong>最近嘅結構位（近期低點或樞軸支撐）。跌破後可能暫時無有效支撐。
+              現價<strong>下方</strong>最近嘅結構位（近期擺動低點／樞軸），距離至少約 0.8% 或
+              0.5×ATR，避免把昨日低點當支撐。跌破後可能暫時顯示「暫無」。
             </InfoTip>
           </dt>
           <dd>
@@ -595,7 +596,7 @@ export default function StockDetailPage() {
         <div className="inset-row">
           <dt>
             <InfoTip label="阻力">
-              現價<strong>上方</strong>最近嘅結構位（近期高點或樞軸阻力）。突破後可能暫時無有效阻力。
+              現價<strong>上方</strong>最近嘅結構位（近期擺動高點／樞軸）。接近區間高位時可能暫時無有效阻力——呢個係正常，唔係壞數據。
             </InfoTip>
           </dt>
           <dd>
