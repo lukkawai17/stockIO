@@ -487,7 +487,8 @@ export function suggestLevels(
   // --- Ideal pullback / confluence buy zone (discount half of range) ---
   const fib382 = support + range * 0.382;
   const fib50 = support + range * 0.5;
-  const discountCap = support + range * 0.45; // stay in lower ~half
+  // Backtest limit fill ~12–22%：略放寬折讓上沿，提高限價成交機會
+  const discountCap = support + range * 0.52;
 
   // Confluence anchors: max of support buffer and MAs that are still below price
   const anchors = [support + atr * 0.15, maPull, deepMa]
@@ -825,7 +826,8 @@ export function scoreShort(snap: Snapshot): ScoreResult {
   risk = clamp(risk);
 
   let score = clamp(trend * 0.3 + momentum * 0.25 + volume * 0.2 + structure * 0.15 + risk * 0.1);
-  let label = labelFromScore(score);
+  // Backtest: many weak「買」訊號；略提高門檻減少噪音
+  let label = labelFromScore(score, 72, 40);
   const pillars = {
     trend: round(trend, 1),
     momentum: round(momentum, 1),
@@ -837,6 +839,13 @@ export function scoreShort(snap: Snapshot): ScoreResult {
   score = gated.score;
   label = gated.label;
   if (gated.gated) reasons.unshift("確認不足：未達跨柱齊備，暫不標「買」");
+
+  // Backtest／結構：貼阻力時「買」容易冲關失敗 → 降級為持有
+  if (label === "買" && dr != null && dr <= 2) {
+    label = "持有";
+    score = Math.min(score, 68.5);
+    reasons.unshift("貼近阻力：暫不標買，等回調或突破確認");
+  }
 
   const levels = suggestLevels(snap, label, "short");
   return {
@@ -850,11 +859,11 @@ export function scoreShort(snap: Snapshot): ScoreResult {
     hold_period: label === "買" ? "3–10 個交易日" : label === "持有" ? "5–15 個交易日" : "暫觀望 / 等更好位置",
     knowledge:
       label === "買"
-        ? "跨類別確認偏多。進場前訂止蝕（支撐下）同倉位（單筆風險≤本金2%）。"
+        ? "跨類別確認偏多。回測顯示限價回調較穩；進場前訂止蝕同倉位（單筆風險≤本金2%）。"
         : label === "避開"
           ? "多因子偏淡。宜等趨勢同動能重新对齐，唔好抄底博反彈。"
-          : gated.gated
-            ? "分數尚可但確認不足。寧願錯過，唔好硬上。"
+          : gated.gated || (dr != null && dr <= 2)
+            ? "分數尚可但位置偏貴／確認不足。寧願錯過，唔好硬上。"
             : "多因子中性。可觀望等待更多確認。",
     levels,
   };

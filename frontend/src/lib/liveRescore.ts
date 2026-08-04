@@ -5,7 +5,10 @@ import type { ScanResponse, StockRow } from "@/lib/types";
 import { yahooFinance } from "@/lib/yahoo";
 
 const TOP_N = 20;
-const MAX_TICKERS = 36;
+/** Keep small enough for Vercel hobby timeouts. */
+const MAX_TICKERS = 24;
+const MIN_PARTIAL = 8;
+const SOFT_DEADLINE_MS = 22_000;
 const CACHE_TTL_OPEN_MS = 2 * 60_000;
 const CACHE_TTL_CLOSED_MS = 15 * 60_000;
 
@@ -23,14 +26,20 @@ type Bar = {
 async function mapPool<T, R>(
   items: T[],
   concurrency: number,
-  fn: (item: T, index: number) => Promise<R>
-): Promise<R[]> {
-  const out: R[] = new Array(items.length);
+  fn: (item: T, index: number) => Promise<R>,
+  shouldStop?: () => boolean
+): Promise<(R | null)[]> {
+  const out: (R | null)[] = new Array(items.length).fill(null);
   let next = 0;
   async function worker() {
     while (next < items.length) {
+      if (shouldStop?.()) return;
       const i = next++;
-      out[i] = await fn(items[i], i);
+      try {
+        out[i] = await fn(items[i], i);
+      } catch {
+        out[i] = null;
+      }
     }
   }
   const n = Math.min(concurrency, Math.max(1, items.length));
@@ -39,6 +48,7 @@ async function mapPool<T, R>(
 }
 
 function uniqueTickers(base: ScanResponse): string[] {
+  // Prefer actionable lists first so soft-timeout still covers 買/避開
   const lists = [base.bullish, base.bearish, base.top, base.hold, base.bottom];
   const seen = new Set<string>();
   const out: string[] = [];
@@ -109,9 +119,41 @@ function rowFromScore(
   };
 }
 
+function packLists(rows: StockRow[], base: ScanResponse, status: string, message?: string): ScanResponse {
+  const sorted = [...rows].sort((a, b) => b.score - a.score);
+  const bullish = sorted.filter((r) => r.label === "買").slice(0, TOP_N);
+  const bearish = sorted
+    .filter((r) => r.label === "避開")
+    .sort((a, b) => a.score - b.score)
+    .slice(0, TOP_N);
+  const hold = sorted.filter((r) => r.label === "持有").slice(0, TOP_N);
+  const top = sorted.slice(0, TOP_N);
+  const bottom = [...sorted].reverse().slice(0, TOP_N);
+  const now = Date.now() / 1000;
+  return {
+    ...base,
+    status,
+    message,
+    live: status.startsWith("live"),
+    // Live score clock (do not overwrite universe_* from base)
+    updated_at: now,
+    updated_at_iso: new Date(now * 1000).toISOString(),
+    universe_updated_at: base.universe_updated_at ?? base.updated_at,
+    universe_updated_at_iso: base.universe_updated_at_iso ?? base.updated_at_iso,
+    universe_stale: base.universe_stale,
+    scanned: sorted.length,
+    top,
+    bottom,
+    bullish,
+    bearish,
+    hold,
+    disclaimer: base.disclaimer || "今晚贏鋪大,老婆仔女攞去賣!",
+  };
+}
+
 /**
- * Re-score the tickers currently featured in the static scan lists
- * using live Yahoo charts/quotes. Cached briefly to protect rate limits.
+ * Re-score featured scan tickers with live Yahoo data.
+ * Soft deadline returns partial results instead of silently failing.
  */
 export async function liveRescoreScan(
   mode: "short" | "long",
@@ -126,13 +168,15 @@ export async function liveRescoreScan(
   const base = await readScan(mode);
   const tickers = uniqueTickers(base);
   if (!tickers.length) {
-    return { ...base, status: "empty" };
+    return { ...base, status: "empty", message: "名單空白，無法即時重計" };
   }
 
-  // Batch quotes (cheap) + SPY chart for relative strength
-  const quoteSymbols = [...tickers, "SPY"];
+  const started = Date.now();
+  const timedOut = () => Date.now() - started > SOFT_DEADLINE_MS;
+
   let quoteMap: Record<string, unknown> = {};
   try {
+    const quoteSymbols = [...tickers, "SPY"];
     const raw = await yahooFinance.quote(quoteSymbols.length === 1 ? quoteSymbols[0] : quoteSymbols);
     const list = Array.isArray(raw) ? raw : [raw];
     for (const q of list) {
@@ -151,8 +195,11 @@ export async function liveRescoreScan(
     spyRet20 = null;
   }
 
-  const settled = await mapPool(tickers, 6, async (ticker) => {
-    try {
+  const settled = await mapPool(
+    tickers,
+    8,
+    async (ticker) => {
+      if (timedOut()) return null;
       const bars = await loadBars(ticker);
       if (bars.length < 30) return null;
       const last = bars[bars.length - 1];
@@ -176,48 +223,40 @@ export async function liveRescoreScan(
       const rel =
         spyRet20 != null ? Math.round((snap.ret_20d - spyRet20) * 100) / 100 : null;
       return rowFromScore(ticker, mode, snap, scoreLong(snap, rel));
-    } catch {
-      return null;
-    }
-  });
+    },
+    timedOut
+  );
 
   const rows = settled.filter((r): r is StockRow => r != null);
-  if (!rows.length) {
-    return { ...base, status: "live_failed", message: "即時重計失敗，沿用上次掃描" };
+  if (rows.length < MIN_PARTIAL) {
+    return {
+      ...base,
+      status: "live_failed",
+      message: `即時重計失敗（只得 ${rows.length} 隻），沿用全市場掃描分數`,
+      universe_updated_at: base.universe_updated_at ?? base.updated_at,
+      universe_updated_at_iso: base.universe_updated_at_iso ?? base.updated_at_iso,
+    };
   }
 
-  rows.sort((a, b) => b.score - a.score);
-  const bullish = rows.filter((r) => r.label === "買").slice(0, TOP_N);
-  const bearish = rows
-    .filter((r) => r.label === "避開")
-    .sort((a, b) => a.score - b.score)
-    .slice(0, TOP_N);
-  const hold = rows.filter((r) => r.label === "持有").slice(0, TOP_N);
-  const top = rows.slice(0, TOP_N);
-  const bottom = [...rows].reverse().slice(0, TOP_N);
-  const now = Date.now() / 1000;
-
-  const data: ScanResponse = {
-    ...base,
-    status: "live",
-    updated_at: now,
-    updated_at_iso: new Date(now * 1000).toISOString(),
-    scanned: rows.length,
-    top,
-    bottom,
-    bullish,
-    bearish,
-    hold,
-    spy:
-      spyRet20 != null
-        ? {
-            price: base.spy?.price ?? 0,
-            change_pct: base.spy?.change_pct ?? 0,
-            ret_20d: spyRet20,
-          }
-        : base.spy,
-    disclaimer: base.disclaimer || "今晚贏鋪大,老婆仔女攞去賣!",
-  };
+  const partial = timedOut() || rows.length < tickers.length;
+  const data = packLists(
+    rows,
+    {
+      ...base,
+      spy:
+        spyRet20 != null
+          ? {
+              price: base.spy?.price ?? 0,
+              change_pct: base.spy?.change_pct ?? 0,
+              ret_20d: spyRet20,
+            }
+          : base.spy,
+    },
+    partial ? "live_partial" : "live",
+    partial
+      ? `即時重計完成 ${rows.length}/${tickers.length} 隻（逾時保護，結果仍可用）`
+      : undefined
+  );
 
   memoryCache.set(mode, { at: Date.now(), data, ttl });
   return data;

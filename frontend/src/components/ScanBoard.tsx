@@ -22,9 +22,19 @@ function mergeQuotes(rows: StockRow[], quotes: Record<string, { price: number; c
   });
 }
 
+function scoreStatusLabel(status?: string) {
+  if (status === "live") return "（即時）";
+  if (status === "live_cached") return "（即時快取）";
+  if (status === "live_partial") return "（即時·部分）";
+  if (status === "live_failed") return "（即時失敗·沿用掃描）";
+  if (status === "universe_stale") return "（掃描偏舊）";
+  return "";
+}
+
 export function ScanBoard({ mode, title, subtitle }: Props) {
   const [data, setData] = useState<ScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scoreWarning, setScoreWarning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [scoring, setScoring] = useState(false);
@@ -38,6 +48,11 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
 
   const applyScan = useCallback((scan: ScanResponse) => {
     setData(scan);
+    if (scan.status === "live_failed" || scan.message) {
+      setScoreWarning(scan.message || null);
+    } else if (scan.status === "live" || scan.status === "live_cached" || scan.status === "live_partial") {
+      setScoreWarning(scan.message || null);
+    }
   }, []);
 
   const loadStatic = useCallback(async () => {
@@ -46,6 +61,9 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
     try {
       const scan = await fetchScan(mode);
       applyScan(scan);
+      if (scan.universe_stale || scan.status === "universe_stale") {
+        setScoreWarning(scan.message || "全市場掃描偏舊；正在嘗試即時重計榜內標的。");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "載入失敗");
     } finally {
@@ -58,11 +76,11 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
     try {
       const scan = await fetchScan(mode, { live: true });
       applyScan(scan);
-      if (scan.updated_at_iso) {
-        /* score timestamp comes from scan.updated_at_iso */
+      if (scan.status === "live_failed") {
+        setScoreWarning(scan.message || "即時重計失敗，沿用掃描分數");
       }
-    } catch {
-      /* keep last scores */
+    } catch (e) {
+      setScoreWarning(e instanceof Error ? e.message : "即時重計失敗，沿用現有分數");
     } finally {
       setScoring(false);
     }
@@ -135,7 +153,6 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
     },
   });
 
-  // Live score refresh — own cadence (not quote 45s interval)
   useAutoRefresh(refreshScores, {
     enabled: !loading,
     watchKey: mode,
@@ -171,6 +188,9 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
           hold: res.hold || [],
           bottom: res.bottom || [],
           disclaimer: res.disclaimer,
+          message: res.message,
+          universe_updated_at_iso: data?.universe_updated_at_iso,
+          universe_stale: data?.universe_stale,
         });
       } else {
         await refreshScores();
@@ -185,6 +205,9 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
 
   const statusClass =
     isOpen || sessionLabel === "盤前" || sessionLabel === "盤後" ? "status-dot open" : "status-dot";
+
+  const universeIso = data?.universe_updated_at_iso || (!data?.live ? data?.updated_at_iso : undefined);
+  const scoreIso = data?.live || data?.status?.startsWith("live") ? data?.updated_at_iso : null;
 
   return (
     <section>
@@ -203,11 +226,25 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
 
       {(data?.updated_at_iso || quoteAt) && (
         <p className="meta-caption">
-          {data?.updated_at_iso ? `分數 ${new Date(data.updated_at_iso).toLocaleString()}` : ""}
-          {data?.status === "live" || data?.status === "live_cached" ? "（即時）" : ""}
+          {scoreIso
+            ? `分數 ${new Date(scoreIso).toLocaleString()}${scoreStatusLabel(data?.status)}`
+            : data?.updated_at_iso
+              ? `分數 ${new Date(data.updated_at_iso).toLocaleString()}${scoreStatusLabel(data?.status)}`
+              : ""}
           {scoring ? " · 重計中…" : ""}
           {quoteAt ? ` · 報價 ${new Date(quoteAt).toLocaleTimeString()}` : ""}
           {data?.scanned ? ` · ${data.scanned} 隻` : ""}
+        </p>
+      )}
+      {universeIso && (
+        <p className="meta-caption">
+          全市場掃描 {new Date(universeIso).toLocaleString()}
+          {data?.universe_stale ? " · 偏舊" : ""}
+        </p>
+      )}
+      {scoreWarning && (
+        <p className="signal-disclaimer" role="status">
+          {scoreWarning}
         </p>
       )}
 
@@ -255,8 +292,8 @@ export function ScanBoard({ mode, title, subtitle }: Props) {
           </div>
           {data.disclaimer && <p className="group-footer">{data.disclaimer}</p>}
           <p className="group-footer">
-            報價開市約每 45 秒更新（而家 {pollHint}）。分數會即時重計清單內標的（而家 {scoreHint}
-            ）；切回分頁亦會刷新。全市場掃描仍由系統定時跑。
+            報價開市約每 45 秒更新（而家 {pollHint}）。榜內分數即時重計（而家 {scoreHint}
+            ）。全市場掃描由 GitHub Actions 定時寫入；超過約 36 小時會標「偏舊」。
           </p>
         </>
       )}

@@ -14,12 +14,19 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: market-scan
+  cancel-in-progress: false
+
 jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -37,20 +44,47 @@ jobs:
         run: |
           cd backend
           python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
           from app.services.scanner import run_scan
+          from app.config import CACHE_SHORT, CACHE_LONG
+
           short = run_scan("short", force=True)
           long = run_scan("long", force=True)
           print("short", short.get("scanned"), "long", long.get("scanned"))
+
+          out = Path("../frontend/public/data") if not str(CACHE_SHORT).endswith("scan_short.json") else CACHE_SHORT.parent
+          # Prefer SCAN_OUT_DIR path
+          health_path = CACHE_SHORT.parent / "scan_health.json"
+          now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+          health = {
+              "ok": True,
+              "updated_at_iso": now,
+              "short_updated_at_iso": short.get("updated_at_iso"),
+              "long_updated_at_iso": long.get("updated_at_iso"),
+              "short_scanned": short.get("scanned"),
+              "long_scanned": long.get("scanned"),
+              "message": "Market scan completed",
+          }
+          health_path.write_text(json.dumps(health, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print("wrote", health_path)
           PY
 
       - name: Commit updated scan data
         run: |
           git config user.name "stockIO bot"
           git config user.email "stockio-bot@users.noreply.github.com"
-          git add frontend/public/data/scan_short.json frontend/public/data/scan_long.json
+          git pull --rebase origin main || true
+          git add frontend/public/data/scan_short.json frontend/public/data/scan_long.json frontend/public/data/scan_health.json
           if git diff --staged --quiet; then
-            echo "No scan changes"
+            echo "No scan file changes"
           else
             git commit -m "chore: refresh market scan data"
-            git push
+            for i in 1 2 3; do
+              git push && break
+              echo "push failed, rebase retry $i"
+              git pull --rebase origin main || true
+              sleep 5
+            done
           fi

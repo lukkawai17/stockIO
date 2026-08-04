@@ -64,6 +64,10 @@ export type ScanResponse = {
   message?: string;
   updated_at?: number;
   updated_at_iso?: string;
+  /** Timestamp of the static full-universe scan file (unchanged by live rescore). */
+  universe_updated_at?: number;
+  universe_updated_at_iso?: string;
+  universe_stale?: boolean;
   universe_size?: number;
   scanned?: number;
   top: StockRow[];

@@ -58,7 +58,7 @@ export default function HomePage() {
         </div>
         <div className="inset-row">
           <dt>更新</dt>
-          <dd>報價約 3 分鐘</dd>
+          <dd>開市報價約 45 秒 · 分數約 3 分鐘即時重計</dd>
         </div>
         <div className="inset-row">
           <dt>版本</dt>

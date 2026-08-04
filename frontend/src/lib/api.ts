@@ -51,6 +51,16 @@ export function fetchStock(ticker: string) {
   return getJSON<StockDetail>(`/api/stock/${encodeURIComponent(ticker)}`);
 }
 
+export function fetchScanHealth() {
+  return getJSON<{
+    ok: boolean;
+    stale: boolean;
+    note?: string;
+    short?: { updated_at_iso?: string; universe_stale?: boolean };
+    long?: { updated_at_iso?: string; universe_stale?: boolean };
+  }>("/api/scan/health");
+}
+
 export function fetchMarketStatus() {
   return getJSON<{
     is_open: boolean;

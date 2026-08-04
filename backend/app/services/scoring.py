@@ -92,7 +92,7 @@ def suggest_levels(snap: dict, label: str, horizon: str = "short") -> dict:
 
     fib382 = support + range_ * 0.382
     fib50 = support + range_ * 0.5
-    discount_cap = support + range_ * 0.45
+    discount_cap = support + range_ * 0.52
     anchors = [support + atr * 0.15, ma_pull, deep_ma]
     anchors = [min(x, p - atr * 0.05) for x in anchors]
     buy_low = max(support + atr * 0.1, min(anchors + [fib382]) - atr * 0.15)
@@ -341,7 +341,7 @@ def score_short(snap: dict) -> dict:
     # Weighted blend (confirmation across categories)
     score = trend * 0.30 + momentum * 0.25 + volume * 0.20 + structure * 0.15 + risk * 0.10
     score = _clamp(score)
-    label = label_from_score(score)
+    label = label_from_score(score, buy_at=72, avoid_below=40)
 
     pillars = {
         "trend": round(trend, 1),
@@ -353,6 +353,13 @@ def score_short(snap: dict) -> dict:
     score, label, gated = _apply_buy_gate(score, label, pillars, 3, ["trend", "momentum"])
     if gated:
         reasons.insert(0, "確認不足：未達跨柱齊備，暫不標「買」")
+
+    sr = snap.get("support_resistance") or {}
+    dr = sr.get("distance_to_resistance_pct")
+    if label == "買" and dr is not None and dr <= 2:
+        label = "持有"
+        score = min(score, 68.5)
+        reasons.insert(0, "貼近阻力：暫不標買，等回調或突破確認")
 
     hold_days = "3–10 個交易日" if label == "買" else ("5–15 個交易日" if label == "持有" else "暫觀望 / 等更好位置")
     levels = suggest_levels(snap, label, "short")
